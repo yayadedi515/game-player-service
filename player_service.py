@@ -45,6 +45,19 @@ def load_players(filename):
     else:
         return loaded_players
 
+# Day 17
+def get_score(players, name):
+    name = name.strip()
+    if name not in players or name == "":
+        return None
+    return players[name]
+def remove_player(players, name):
+    name = name.strip()
+    if name not in players or name == "":
+        return False
+    del players[name]
+    return True
+
 players = {}
 
 print(add_player(players, "Alice"))
@@ -68,3 +81,26 @@ print(loaded_players)
 print(get_ranking(loaded_players))
 
 print(load_players("missing.json"))
+
+# Day 17
+print("17====================")
+test_players = {
+    "Alice": 120,
+    "Bob": 90,
+    "Charlie": 90
+}
+
+print(get_score(test_players, " Alice "))
+print(get_score(test_players, "Cindy"))
+print(get_score(test_players, "   "))
+
+print(remove_player(test_players, " Bob "))
+print(remove_player(test_players, "Bob"))
+print(remove_player(test_players, "   "))
+
+print(test_players)
+edge_players = {"": 999}
+
+print(get_score(edge_players, "   "))
+print(remove_player(edge_players, "   "))
+print(edge_players)
