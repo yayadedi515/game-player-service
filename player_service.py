@@ -58,6 +58,24 @@ def remove_player(players, name):
     del players[name]
     return True
 
+class PlayerService:
+    def __init__(self, initial_players=None):
+        if initial_players is None:
+            self.players = {}
+        else:
+            self.players = initial_players.copy()
+    def add_player(self, name):
+        return add_player(self.players, name)
+    def add_score(self, name, score):
+        return add_score(self.players, name, score)
+    def get_score(self, name):
+        return get_score(self.players, name)
+    def remove_player(self, name):
+        return remove_player(self.players, name)
+    def get_ranking(self):
+        return get_ranking(self.players)
+
+
 players = {}
 
 print(add_player(players, "Alice"))
@@ -104,3 +122,29 @@ edge_players = {"": 999}
 print(get_score(edge_players, "   "))
 print(remove_player(edge_players, "   "))
 print(edge_players)
+
+print("18====================")
+initial_players = {
+    "Alice": 120
+}
+
+service = PlayerService(initial_players)
+
+print(service.add_player(" Bob "))
+print(service.add_score("Bob", 90))
+print(service.get_score(" Alice "))
+print(service.get_ranking())
+print(service.remove_player("Alice"))
+print(service.get_ranking())
+print(initial_players)
+
+original = {"Alice": 120}
+
+service_a = PlayerService(original)
+service_b = PlayerService(original)
+print("XXX")
+service_a.add_player("Bob")
+
+print(service_a.players)
+print(service_b.players)
+print(original)
