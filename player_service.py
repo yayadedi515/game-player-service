@@ -1,4 +1,5 @@
 import json
+import copy
 def add_player(players, name):
     name=name.strip()
     if name in players or name == "":
@@ -37,8 +38,6 @@ def load_players(filename):
         with open(filename, "r", encoding="utf-8") as file:
             loaded_players = json.load(file)
 
-    except FileNotFoundError:
-        return {}
     except (OSError, json.JSONDecodeError):
         return None
 
@@ -63,7 +62,7 @@ class PlayerService:
         if initial_players is None:
             self.players = {}
         else:
-            self.players = initial_players.copy()
+            self.players = copy.deepcopy(initial_players)
     def add_player(self, name):
         return add_player(self.players, name)
     def add_score(self, name, score):
@@ -74,6 +73,20 @@ class PlayerService:
         return remove_player(self.players, name)
     def get_ranking(self):
         return get_ranking(self.players)
+    def save(self, filename):
+        return save_players(self.players, filename)
+
+    def load(self, filename):
+        loaded_players = load_players(filename)
+
+        if loaded_players is None:
+            return False
+
+        if not isinstance(loaded_players, dict):
+            return False
+
+        self.players = loaded_players
+        return True
 
 
 players = {}
