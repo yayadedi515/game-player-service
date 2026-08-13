@@ -89,75 +89,76 @@ class PlayerService:
         return True
 
 
-players = {}
 
-print(add_player(players, "Alice"))
-print(add_player(players, "Alice"))
-print(add_player(players, "Bob"))
-print(add_score(players, "Alice", 120))
-print(add_score(players, "Bob", 90))
-print(add_score(players, "Cindy", 50))
-print(add_score(players, "Bob", -10))
-print(get_ranking(players))
+if __name__ == "__main__":  #测试~~
+    players = {}
+    print(add_player(players, "Alice"))
+    print(add_player(players, "Alice"))
+    print(add_player(players, "Bob"))
+    print(add_score(players, "Alice", 120))
+    print(add_score(players, "Bob", 90))
+    print(add_score(players, "Cindy", 50))
+    print(add_score(players, "Bob", -10))
+    print(get_ranking(players))
 
-print(add_player(players, "  Charlie  "))
-print(add_score(players, " Charlie ", 90))
-print(add_player(players, "   "))
-print(get_ranking(players))
+    print(add_player(players, "  Charlie  "))
+    print(add_score(players, " Charlie ", 90))
+    print(add_player(players, "   "))
+    print(get_ranking(players))
 
-print(save_players(players, "players.json"))
+    print(save_players(players, "players.json"))
 
-loaded_players = load_players("players.json")
-print(loaded_players)
-print(get_ranking(loaded_players))
+    loaded_players = load_players("players.json")
+    print(loaded_players)
+    print(get_ranking(loaded_players))
 
-print(load_players("missing.json"))
+    print(load_players("missing.json"))
 
-# Day 17
-print("17====================")
-test_players = {
-    "Alice": 120,
-    "Bob": 90,
-    "Charlie": 90
-}
+    # Day 17
+    print("17====================")
+    test_players = {
+        "Alice": 120,
+        "Bob": 90,
+        "Charlie": 90
+    }
 
-print(get_score(test_players, " Alice "))
-print(get_score(test_players, "Cindy"))
-print(get_score(test_players, "   "))
+    print(get_score(test_players, " Alice "))
+    print(get_score(test_players, "Cindy"))
+    print(get_score(test_players, "   "))
 
-print(remove_player(test_players, " Bob "))
-print(remove_player(test_players, "Bob"))
-print(remove_player(test_players, "   "))
+    print(remove_player(test_players, " Bob "))
+    print(remove_player(test_players, "Bob"))
+    print(remove_player(test_players, "   "))
 
-print(test_players)
-edge_players = {"": 999}
+    print(test_players)
+    edge_players = {"": 999}
 
-print(get_score(edge_players, "   "))
-print(remove_player(edge_players, "   "))
-print(edge_players)
+    print(get_score(edge_players, "   "))
+    print(remove_player(edge_players, "   "))
+    print(edge_players)
 
-print("18====================")
-initial_players = {
-    "Alice": 120
-}
+    print("18====================")
+    initial_players = {
+        "Alice": 120
+    }
 
-service = PlayerService(initial_players)
+    service = PlayerService(initial_players)
 
-print(service.add_player(" Bob "))
-print(service.add_score("Bob", 90))
-print(service.get_score(" Alice "))
-print(service.get_ranking())
-print(service.remove_player("Alice"))
-print(service.get_ranking())
-print(initial_players)
+    print(service.add_player(" Bob "))
+    print(service.add_score("Bob", 90))
+    print(service.get_score(" Alice "))
+    print(service.get_ranking())
+    print(service.remove_player("Alice"))
+    print(service.get_ranking())
+    print(initial_players)
 
-original = {"Alice": 120}
+    original = {"Alice": 120}
 
-service_a = PlayerService(original)
-service_b = PlayerService(original)
-print("XXX")
-service_a.add_player("Bob")
+    service_a = PlayerService(original)
+    service_b = PlayerService(original)
+    print("XXX")
+    service_a.add_player("Bob")
 
-print(service_a.players)
-print(service_b.players)
-print(original)
+    print(service_a.players)
+    print(service_b.players)
+    print(original)
