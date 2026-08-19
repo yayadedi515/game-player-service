@@ -60,8 +60,82 @@ def test_persistence():
         assert service_c.load(missing_file) is False
         assert service_c.players == {"Charlie": 50}
 
+
+def test_transfer_score_success():
+    service = PlayerService({
+        "Alice": 100,
+        "Bob": 20
+    })
+
+    result = service.transfer_score(
+        " Alice ",
+        " Bob ",
+        30
+    )
+
+    assert result is True
+    assert service.players == {
+        "Alice": 70,
+        "Bob": 50
+    }
+
+def test_transfer_score_failures():
+    service = PlayerService({
+        "Alice": 100,
+        "Bob": 20
+    })
+
+    invalid_cases = [
+        ("Cindy", "Bob", 10),     # 发送者不存在
+        ("Alice", "Cindy", 10),   # 接收者不存在
+        ("Alice", "Alice", 10),   # 给自己转账
+        ("Alice", "Bob", 0),      # 数量为0
+        ("Alice", "Bob", -10),    # 数量为负
+        ("Alice", "Bob", 101),    # 余额不足
+        ("   ", "Bob", 10),       # 发送者为空
+        ("Alice", "   ", 10),     # 接收者为空
+    ]
+
+    for sender, receiver, points in invalid_cases:
+        before = service.players.copy()
+
+        result = service.transfer_score(
+            sender,
+            receiver,
+            points
+        )
+
+        assert result is False, (
+            f"Unexpected success: "
+            f"sender={sender!r}, "
+            f"receiver={receiver!r}, "
+            f"points={points}"
+        )
+        assert service.players == before
+
+def test_transfer_all_score():
+    service = PlayerService({
+        "Alice": 100,
+        "Bob": 20
+    })
+
+    assert service.transfer_score(
+        "Alice",
+        "Bob",
+        100
+    ) is True
+
+    assert service.players == {
+        "Alice": 0,
+        "Bob": 120
+    }
+
 if __name__ == "__main__":
     test_basic_operations()
     test_data_isolation()
     test_persistence()
+    test_transfer_score_success()
+    test_transfer_score_failures()
+    test_transfer_all_score()
+
     print("All tests passed")

@@ -57,6 +57,27 @@ def remove_player(players, name):
     del players[name]
     return True
 
+def transfer_score(players, sender, receiver, points):
+    # 1. 清理两个名字
+    # 2. 一次性完成所有合法性检查
+    # 3. 检查全部通过后，才修改双方积分
+    # 4. 成功返回True，失败返回False
+    sender=sender.strip()
+    receiver=receiver.strip()
+    if (
+        not sender
+        or not receiver
+        or sender == receiver
+        or sender not in players
+        or receiver not in players
+        or points <= 0
+        or players[sender] < points
+    ):
+        return False
+    players[sender] -= points
+    players[receiver] += points
+    return True
+
 class PlayerService:
     def __init__(self, initial_players=None):
         if initial_players is None:
@@ -87,7 +108,8 @@ class PlayerService:
 
         self.players = loaded_players
         return True
-
+    def transfer_score(self, sender, receiver, points):
+        return transfer_score(self.players, sender, receiver, points)
 
 
 if __name__ == "__main__":  #测试~~
