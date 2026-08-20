@@ -84,6 +84,7 @@ class PlayerService:
             self.players = {}
         else:
             self.players = copy.deepcopy(initial_players)
+        self.transfer_history = []
     def add_player(self, name):
         return add_player(self.players, name)
     def add_score(self, name, score):
@@ -109,7 +110,22 @@ class PlayerService:
         self.players = loaded_players
         return True
     def transfer_score(self, sender, receiver, points):
-        return transfer_score(self.players, sender, receiver, points)
+        sender = sender.strip()
+        receiver = receiver.strip()
+        success = transfer_score(
+            self.players,
+            sender,
+            receiver,
+            points
+        )
+
+        if success:
+            self.transfer_history.append({
+                "sender": sender,
+                "receiver": receiver,
+                "points": points
+            })
+        return success
 
 
 if __name__ == "__main__":  #测试~~

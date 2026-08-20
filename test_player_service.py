@@ -130,6 +130,36 @@ def test_transfer_all_score():
         "Bob": 120
     }
 
+def test_transfer_history():
+    service = PlayerService({
+        "Alice": 100,
+        "Bob": 20
+    })
+
+    assert service.transfer_history == []
+
+    assert service.transfer_score(
+        " Alice ",
+        " Bob ",
+        30
+    ) is True
+
+    assert service.transfer_history == [
+        {
+            "sender": "Alice",
+            "receiver": "Bob",
+            "points": 30
+        }
+    ]
+
+    assert service.transfer_score(
+        "Alice",
+        "Bob",
+        100
+    ) is False
+
+    assert len(service.transfer_history) == 1
+
 if __name__ == "__main__":
     test_basic_operations()
     test_data_isolation()
@@ -137,5 +167,6 @@ if __name__ == "__main__":
     test_transfer_score_success()
     test_transfer_score_failures()
     test_transfer_all_score()
+    test_transfer_history()
 
     print("All tests passed")
