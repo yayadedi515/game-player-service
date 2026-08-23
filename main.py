@@ -58,3 +58,18 @@ def create_player(player: PlayerCreate):
         "name": name,
         "score": service.get_score(name)
     }
+
+
+@app.delete("/players/{name}", status_code=200)
+def delete_player(name: str):
+    success = service.remove_player(name)
+
+    if not success:
+        raise HTTPException(
+            status_code=404,
+            detail="Player not found"
+        )
+
+    return {
+        "message": f"{name} has been deleted"
+    }

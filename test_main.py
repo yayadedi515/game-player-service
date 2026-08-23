@@ -84,3 +84,21 @@ def test_create_player_empty_name():
     )
     assert response.status_code == 400
     assert response.json() == {"detail": "Invalid or duplicate player"}
+
+
+def test_delete_player_success():
+    response = client.delete(
+        "/players/Alice"
+    )
+    assert response.status_code == 200
+    assert response.json() == {"message": "Alice has been deleted"}
+    new_response = client.get("/players/Alice")
+    assert new_response.status_code == 404
+    assert new_response.json() == {"detail": "Player not found"}
+
+def test_delete_player_not_found():
+    response = client.delete(
+        "/players/Cindy"
+    )
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Player not found"}
