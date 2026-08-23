@@ -159,14 +159,3 @@ def test_transfer_history():
     ) is False
 
     assert len(service.transfer_history) == 1
-
-if __name__ == "__main__":
-    test_basic_operations()
-    test_data_isolation()
-    test_persistence()
-    test_transfer_score_success()
-    test_transfer_score_failures()
-    test_transfer_all_score()
-    test_transfer_history()
-
-    print("All tests passed")
