@@ -1,5 +1,5 @@
 from database import get_connection
-
+from psycopg.errors import UniqueViolation
 
 def find_player_by_name(name: str) -> dict | None:
     cleaned_name = name.strip()
@@ -17,6 +17,38 @@ def find_player_by_name(name: str) -> dict | None:
         with connection.cursor() as cursor:
             cursor.execute(query, (cleaned_name,))
             row = cursor.fetchone()
+
+    if row is None:
+        return None
+
+    return {
+        "player_id": row[0],
+        "name": row[1],
+        "score": row[2],
+        "created_at": row[3]
+    }
+
+
+def create_player(name: str) -> dict | None:
+    cleaned_name = name.strip()
+
+    if cleaned_name == "":
+        return None
+
+    query = """
+        INSERT INTO players (name)
+        VALUES (%s)
+        RETURNING player_id, name, score, created_at
+    """
+
+    try:
+        with get_connection() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(query, (cleaned_name,))
+                row = cursor.fetchone()
+
+    except UniqueViolation:
+        return None
 
     if row is None:
         return None
