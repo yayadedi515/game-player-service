@@ -59,3 +59,52 @@ def create_player(name: str) -> dict | None:
         "score": row[2],
         "created_at": row[3]
     }
+
+
+def add_score(name: str, score: int) -> dict | None:
+    cleaned_name = name.strip()
+
+    if cleaned_name == "" or score < 0:
+        return None
+
+    query = """
+        UPDATE players set score = score + %s WHERE name = %s
+        RETURNING player_id, name, score, created_at
+    """
+
+    with get_connection() as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(query, (score, cleaned_name,))
+            row = cursor.fetchone()
+
+    if row is None:
+        return None
+
+    return {
+        "player_id": row[0],
+        "name": row[1],
+        "score": row[2],
+        "created_at": row[3]
+    }
+
+
+def get_ranking() -> list[dict]:
+    query = """
+        SELECT player_id, name, score, created_at
+        FROM players
+        ORDER BY score DESC, name ASC
+    """
+
+    with get_connection() as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(query)
+            rows = cursor.fetchall()
+
+        result = []
+        for row in rows:
+            result.append(
+                {"player_id": row[0], "name": row[1],
+                 "score": row[2], "created_at": row[3]
+                }
+            )
+        return result
