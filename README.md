@@ -14,7 +14,7 @@
 |------------------------| -------------------------------------- | ---------- |
 | FastAPI API            | プレイヤー作成・検索・削除、ランキング                    | Pythonの辞書  |
 | PlayerService          | スコア追加、スコア移動、履歴、JSON保存・読込               | メモリ／JSON   |
-| PostgreSQL Repository  | プレイヤー検索・作成、スコア追加、ランキング、トランザクション付きスコア移動 | PostgreSQL |
+| PostgreSQL Repository  | プレイヤー検索・作成・削除、スコア追加、ランキング、トランザクション付きスコア移動 | PostgreSQL |
 
 現在は次の2つの経路が独立して存在します。
 
@@ -185,7 +185,7 @@ python -m pytest -m integration -q
 実行結果：
 
 ```text
-32 passed
+37 passed
 ```
 
 全テスト：
@@ -197,7 +197,7 @@ python -m pytest -q
 現在の実行結果：
 
 ```text
-49 passed
+54 passed
 ```
 
 統合テストには、意図的にPostgreSQLの整数上限超過を発生させるテストが含まれています。スコアの加算処理が途中で失敗した場合でも、送信者の減算、受信者の加算、移動履歴の追加がすべてロールバックされることを確認しています。
@@ -285,11 +285,11 @@ Game Player Service 是一个以游戏玩家管理为场景的 Python 后端作�
 
 ### 当前架构
 
-| 层级                    | 已实现功能                     | 数据存储       |
-| --------------------- | ------------------------- | ---------- |
-| FastAPI API           | 玩家创建、查询、删除、排行榜            | Python 字典  |
-| PlayerService         | 积分增加、积分转移、历史记录、JSON 保存与读取 | 内存／JSON    |
-| PostgreSQL Repository | 玩家查询与创建、积分增加、排行榜、事务化积分转移  | PostgreSQL |
+| 层级                    | 已实现功能                       | 数据存储       |
+| --------------------- |-----------------------------| ---------- |
+| FastAPI API           | 玩家创建、查询、删除、排行榜              | Python 字典  |
+| PlayerService         | 积分增加、积分转移、历史记录、JSON 保存与读取   | 内存／JSON    |
+| PostgreSQL Repository | 玩家查询、创建、删除、积分增加、排行榜、事务化积分转移 | PostgreSQL |
 
 因此，当前存在两条独立路径：
 
@@ -427,7 +427,7 @@ python -m pytest -m integration -q
 当前结果：
 
 ```text
-32 passed
+37 passed
 ```
 
 执行全部测试：
@@ -439,7 +439,7 @@ python -m pytest -q
 当前结果：
 
 ```text
-49 passed
+54 passed
 ```
 
 ### 事务设计
