@@ -3,8 +3,9 @@ from fastapi.testclient import TestClient
 
 from main import app, service
 
-
 client = TestClient(app)
+
+
 @pytest.fixture(autouse=True)
 def reset_service():
     service.players = {
@@ -95,6 +96,7 @@ def test_delete_player_success():
     new_response = client.get("/players/Alice")
     assert new_response.status_code == 404
     assert new_response.json() == {"detail": "Player not found"}
+
 
 def test_delete_player_not_found():
     response = client.delete(

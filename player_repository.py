@@ -1,5 +1,7 @@
-from database import get_connection
 from psycopg.errors import UniqueViolation
+
+from database import get_connection
+
 
 def find_player_by_name(name: str) -> dict | None:
     cleaned_name = name.strip()
@@ -68,7 +70,9 @@ def add_score(name: str, score: int) -> dict | None:
         return None
 
     query = """
-        UPDATE players set score = score + %s WHERE name = %s
+        UPDATE players
+        SET score = score + %s
+        WHERE name = %s
         RETURNING player_id, name, score, created_at
     """
 
@@ -102,11 +106,12 @@ def get_ranking() -> list[dict]:
 
         result = []
         for row in rows:
-            result.append(
-                {"player_id": row[0], "name": row[1],
-                 "score": row[2], "created_at": row[3]
-                }
-            )
+            result.append({
+                "player_id": row[0],
+                "name": row[1],
+                "score": row[2],
+                "created_at": row[3]
+            })
         return result
 
 
@@ -115,10 +120,10 @@ def transfer_score(sender: str, receiver: str, points: int) -> bool:
     cleaned_receiver = receiver.strip()
 
     if (
-        not cleaned_sender
-        or not cleaned_receiver
-        or cleaned_sender == cleaned_receiver
-        or points <= 0
+            not cleaned_sender
+            or not cleaned_receiver
+            or cleaned_sender == cleaned_receiver
+            or points <= 0
     ):
         return False
 

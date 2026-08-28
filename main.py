@@ -1,9 +1,12 @@
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
+
 from player_service import PlayerService
+
 
 class PlayerCreate(BaseModel):
     name: str
+
 
 app = FastAPI(title="Game Player Service")
 
@@ -32,6 +35,7 @@ def get_player(name: str):
         "name": name,
         "score": score
     }
+
 
 @app.get("/ranking")
 def get_ranking():

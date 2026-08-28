@@ -1,6 +1,5 @@
-from multiprocessing import connection
-from psycopg.errors import NumericValueOutOfRange
 import pytest
+from psycopg.errors import NumericValueOutOfRange
 
 from database import get_connection
 from player_repository import (
@@ -11,10 +10,9 @@ from player_repository import (
     transfer_score
 )
 
-
-
 TEST_DATABASE = "game_player_service_test"
 pytestmark = pytest.mark.integration
+
 
 @pytest.fixture(autouse=True)
 def reset_test_database(monkeypatch):
@@ -94,10 +92,12 @@ def test_create_player():
 
     assert result == player
 
+
 def test_create_duplicate_player_returns_none():
     player = create_player("Alice")
 
     assert player is None
+
 
 def test_create_player_strips_whitespace():
     player = create_player("    Diana  ")
@@ -208,6 +208,7 @@ def test_get_ranking_orders_by_score_and_name():
         find_player_by_name("Charlie"),
     ]
 
+
 def test_get_ranking_empty_table_returns_empty_list():
     query = """
         DELETE FROM players
@@ -305,11 +306,11 @@ def test_transfer_score_insufficient_balance_returns_false_without_changes():
 
 @pytest.mark.parametrize(
     (
-        "points",
-        "expected_result",
-        "expected_alice_score",
-        "expected_bob_score",
-        "expected_history_count",
+            "points",
+            "expected_result",
+            "expected_alice_score",
+            "expected_bob_score",
+            "expected_history_count",
     ),
     [
         (-1, False, 90, 0, 0),
@@ -321,11 +322,11 @@ def test_transfer_score_insufficient_balance_returns_false_without_changes():
     ],
 )
 def test_transfer_score_points_boundaries(
-    points,
-    expected_result,
-    expected_alice_score,
-    expected_bob_score,
-    expected_history_count,
+        points,
+        expected_result,
+        expected_alice_score,
+        expected_bob_score,
+        expected_history_count,
 ):
     create_player("Bob")
 
@@ -361,8 +362,8 @@ def test_transfer_score_points_boundaries(
     ],
 )
 def test_transfer_score_rejects_invalid_players_without_changes(
-    sender_name,
-    receiver_name,
+        sender_name,
+        receiver_name,
 ):
     create_player("Bob")
 
