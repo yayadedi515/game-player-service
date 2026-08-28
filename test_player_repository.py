@@ -1,5 +1,5 @@
 from multiprocessing import connection
-
+from psycopg.errors import NumericValueOutOfRange
 import pytest
 
 from database import get_connection
@@ -412,3 +412,30 @@ def test_transfer_score_strips_whitespace():
             row = cursor.fetchone()
 
     assert row[0] == 1
+
+
+def test_transfer_score_rolls_back_when_receiver_update_fails():
+    create_player("Bob")
+    add_score("Bob", 2_147_483_647)
+
+    with pytest.raises(NumericValueOutOfRange):
+        transfer_score("Alice", "Bob", 1)
+
+    alice = find_player_by_name("Alice")
+    bob = find_player_by_name("Bob")
+
+    assert alice is not None
+    assert bob is not None
+    assert alice["score"] == 90
+    assert bob["score"] == 2_147_483_647
+
+    query = """
+        SELECT COUNT(*) FROM transfer_history
+    """
+
+    with get_connection() as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(query)
+            row = cursor.fetchone()
+
+    assert row[0] == 0
