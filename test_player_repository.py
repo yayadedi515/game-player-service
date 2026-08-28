@@ -1,5 +1,5 @@
 import pytest
-from psycopg.errors import NumericValueOutOfRange
+from psycopg.errors import NumericValueOutOfRange, RestrictViolation
 
 from database import get_connection
 from player_repository import (
@@ -7,7 +7,8 @@ from player_repository import (
     find_player_by_name,
     add_score,
     get_ranking,
-    transfer_score
+    transfer_score,
+    delete_player
 )
 
 TEST_DATABASE = "game_player_service_test"
@@ -440,3 +441,59 @@ def test_transfer_score_rolls_back_when_receiver_update_fails():
             row = cursor.fetchone()
 
     assert row[0] == 0
+
+
+def test_delete_existing_player():
+    player = delete_player("Alice")
+    assert player["player_id"] == 1
+    assert player["name"] == "Alice"
+    assert player["score"] == 90
+    assert player["created_at"] is not None
+
+    result = find_player_by_name("Alice")
+    assert result is None
+
+
+def test_delete_missing_player_returns_none():
+    player = delete_player("Bob")
+
+    assert player is None
+
+    result = find_player_by_name("Alice")
+
+    assert result is not None
+
+
+def test_delete_player_strips_whitespace():
+    player = delete_player("  Alice  ")
+
+    assert player["name"] == "Alice"
+
+    result = find_player_by_name("Alice")
+
+    assert result is None
+
+
+def test_delete_blank_player_returns_none():
+    player = delete_player("    ")
+
+    assert player is None
+
+    result = find_player_by_name("Alice")
+
+    assert result is not None
+
+
+def test_delete_player_with_transfer_history_raises_restrict_violation():
+    create_player("Bob")
+    success = transfer_score("Alice", "Bob", 10)
+
+    assert success is True
+
+    with pytest.raises(RestrictViolation):
+        delete_player("Alice")
+
+    result = find_player_by_name("Alice")
+
+    assert result is not None
+    assert result["score"] == 80
