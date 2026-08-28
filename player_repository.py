@@ -108,3 +108,78 @@ def get_ranking() -> list[dict]:
                 }
             )
         return result
+
+
+def transfer_score(sender: str, receiver: str, points: int) -> bool:
+    cleaned_sender = sender.strip()
+    cleaned_receiver = receiver.strip()
+
+    if (
+        not cleaned_sender
+        or not cleaned_receiver
+        or cleaned_sender == cleaned_receiver
+        or points <= 0
+    ):
+        return False
+
+    select_query = """
+        SELECT player_id, name, score
+        FROM players
+        WHERE name IN (%s, %s)
+        ORDER BY player_id
+        FOR UPDATE
+    """
+
+    subtract_query = """
+        UPDATE players
+        SET score = score - %s
+        WHERE player_id = %s
+    """
+
+    add_query = """
+        UPDATE players
+        SET score = score + %s
+        WHERE player_id = %s
+    """
+
+    history_query = """
+        INSERT INTO transfer_history (sender_id, receiver_id, points)
+        VALUES (%s, %s, %s)
+    """
+
+    with get_connection() as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                select_query,
+                (cleaned_sender, cleaned_receiver),
+            )
+            rows = cursor.fetchall()
+
+            if len(rows) != 2:
+                return False
+
+            locked_players = {
+                row[1]: row
+                for row in rows
+            }
+
+            sender_row = locked_players[cleaned_sender]
+            receiver_row = locked_players[cleaned_receiver]
+
+            if sender_row[2] < points:
+                return False
+
+            cursor.execute(
+                subtract_query,
+                (points, sender_row[0]),
+            )
+            cursor.execute(
+                add_query,
+                (points, receiver_row[0]),
+            )
+            cursor.execute(
+                history_query,
+                (sender_row[0], receiver_row[0], points),
+            )
+
+    return True
