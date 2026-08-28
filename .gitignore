@@ -4,3 +4,8 @@ __pycache__/
 *.pyc
 players.json
 .env
+.pytest_cache/
+.coverage
+htmlcov/
+.env.*
+!.env.example
