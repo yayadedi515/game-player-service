@@ -3,6 +3,7 @@ from fastapi.testclient import TestClient
 
 from main import app
 from player_repository import transfer_score
+from transfer_result import TransferResult
 
 pytestmark = [
     pytest.mark.integration,
@@ -93,7 +94,7 @@ def test_delete_player_with_transfer_history_returns_conflict_from_postgresql():
         "Bob",
         10
     )
-    assert success is True
+    assert success is TransferResult.SUCCESS
 
     response = client.delete("/players/Alice")
 
@@ -129,4 +130,80 @@ def test_add_score_persists_to_postgresql():
     assert get_response.json() == {
         "name": "Alice",
         "score": 120
+    }
+
+
+def test_transfer_score_persists_to_postgresql():
+    create_response = client.post(
+        "/players",
+        json={"name": "Bob"}
+    )
+    assert create_response.status_code == 201
+
+    transfer_response = client.post(
+        "/transfers",
+        json={
+            "sender": "Alice",
+            "receiver": "Bob",
+            "points": 30
+        }
+    )
+
+    assert transfer_response.status_code == 201
+    assert transfer_response.json() == {
+        "sender": "Alice",
+        "receiver": "Bob",
+        "points": 30
+    }
+
+    alice_response = client.get("/players/Alice")
+    bob_response = client.get("/players/Bob")
+
+    assert alice_response.status_code == 200
+    assert bob_response.status_code == 200
+
+    assert alice_response.json() == {
+        "name": "Alice",
+        "score": 60
+    }
+    assert bob_response.json() == {
+        "name": "Bob",
+        "score": 30
+    }
+
+
+def test_transfer_score_insufficient_score_returns_conflict_from_postgresql():
+    create_response = client.post(
+        "/players",
+        json={"name": "Bob"}
+    )
+    assert create_response.status_code == 201
+
+    transfer_response = client.post(
+        "/transfers",
+        json={
+            "sender": "Alice",
+            "receiver": "Bob",
+            "points": 91
+        }
+    )
+
+    assert transfer_response.status_code == 409
+    assert transfer_response.json() == {
+        "detail": "Insufficient score"
+    }
+
+    alice_response = client.get("/players/Alice")
+    bob_response = client.get("/players/Bob")
+
+    assert alice_response.status_code == 200
+    assert bob_response.status_code == 200
+
+    assert alice_response.json() == {
+        "name": "Alice",
+        "score": 90
+    }
+    assert bob_response.json() == {
+        "name": "Bob",
+        "score": 0
     }

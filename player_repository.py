@@ -1,6 +1,7 @@
 from psycopg.errors import UniqueViolation
 
 from database import get_connection
+from transfer_result import TransferResult
 
 
 def find_player_by_name(name: str) -> dict | None:
@@ -115,7 +116,11 @@ def get_ranking() -> list[dict]:
         return result
 
 
-def transfer_score(sender: str, receiver: str, points: int) -> bool:
+def transfer_score(
+        sender: str,
+        receiver: str,
+        points: int
+) -> TransferResult:
     cleaned_sender = sender.strip()
     cleaned_receiver = receiver.strip()
 
@@ -125,7 +130,7 @@ def transfer_score(sender: str, receiver: str, points: int) -> bool:
             or cleaned_sender == cleaned_receiver
             or points <= 0
     ):
-        return False
+        return TransferResult.INVALID_REQUEST
 
     select_query = """
         SELECT player_id, name, score
@@ -161,7 +166,7 @@ def transfer_score(sender: str, receiver: str, points: int) -> bool:
             rows = cursor.fetchall()
 
             if len(rows) != 2:
-                return False
+                return TransferResult.PLAYER_NOT_FOUND
 
             locked_players = {
                 row[1]: row
@@ -172,7 +177,7 @@ def transfer_score(sender: str, receiver: str, points: int) -> bool:
             receiver_row = locked_players[cleaned_receiver]
 
             if sender_row[2] < points:
-                return False
+                return TransferResult.INSUFFICIENT_SCORE
 
             cursor.execute(
                 subtract_query,
@@ -187,7 +192,7 @@ def transfer_score(sender: str, receiver: str, points: int) -> bool:
                 (sender_row[0], receiver_row[0], points),
             )
 
-    return True
+    return TransferResult.SUCCESS
 
 
 def delete_player(name: str) -> dict | None:

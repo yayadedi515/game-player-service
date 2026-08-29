@@ -4,6 +4,7 @@ from psycopg.errors import RestrictViolation
 
 import main
 from main import app
+from transfer_result import TransferResult
 
 client = TestClient(app)
 
@@ -83,6 +84,30 @@ class FakeRepository:
         player["score"] += points
         return player
 
+    def transfer_score(self, sender, receiver, points):
+        cleaned_sender = sender.strip()
+        cleaned_receiver = receiver.strip()
+
+        if (
+                not cleaned_sender
+                or not cleaned_receiver
+                or cleaned_sender == cleaned_receiver
+                or points <= 0
+        ):
+            return TransferResult.INVALID_REQUEST
+
+        sender_player = self.players.get(cleaned_sender)
+        receiver_player = self.players.get(cleaned_receiver)
+
+        if sender_player is None or receiver_player is None:
+            return TransferResult.PLAYER_NOT_FOUND
+
+        if sender_player["score"] < points:
+            return TransferResult.INSUFFICIENT_SCORE
+
+        sender_player["score"] -= points
+        receiver_player["score"] += points
+        return TransferResult.SUCCESS
 
 @pytest.fixture(autouse=True)
 def fake_repository():
@@ -282,3 +307,101 @@ def test_add_score_zero_points_is_allowed(fake_repository):
         "score": 120
     }
     assert fake_repository.players["Alice"]["score"] == 120
+
+
+def test_transfer_score_success(fake_repository):
+    response = client.post(
+        "/transfers",
+        json={
+            "sender": "Alice",
+            "receiver": "Bob",
+            "points": 30
+        }
+    )
+
+    assert response.status_code == 201
+    assert response.json() == {
+        "sender": "Alice",
+        "receiver": "Bob",
+        "points": 30
+    }
+
+    assert fake_repository.players["Alice"]["score"] == 90
+    assert fake_repository.players["Bob"]["score"] == 120
+
+
+def test_transfer_score_insufficient_score_returns_conflict(
+        fake_repository
+):
+    response = client.post(
+        "/transfers",
+        json={
+            "sender": "Alice",
+            "receiver": "Bob",
+            "points": 121
+        }
+    )
+
+    assert response.status_code == 409
+    assert response.json() == {
+        "detail": "Insufficient score"
+    }
+
+    assert fake_repository.players["Alice"]["score"] == 120
+    assert fake_repository.players["Bob"]["score"] == 90
+
+
+def test_transfer_score_missing_player_returns_not_found(fake_repository):
+    response = client.post(
+        "/transfers",
+        json={
+            "sender": "Alice",
+            "receiver": "Cindy",
+            "points": 10
+        }
+    )
+
+    assert response.status_code == 404
+    assert response.json() == {
+        "detail": "Player not found"
+    }
+
+    assert fake_repository.players["Alice"]["score"] == 120
+    assert fake_repository.players["Bob"]["score"] == 90
+
+
+def test_transfer_score_same_player_returns_422(fake_repository):
+    response = client.post(
+        "/transfers",
+        json={
+            "sender": "Alice",
+            "receiver": "Alice",
+            "points": 10
+        }
+    )
+
+    assert response.status_code == 422
+    assert response.json() == {
+        "detail": "Invalid transfer"
+    }
+
+    assert fake_repository.players["Alice"]["score"] == 120
+
+
+@pytest.mark.parametrize("points", [0, -1])
+def test_transfer_score_non_positive_points_returns_422(
+        fake_repository,
+        points
+):
+    response = client.post(
+        "/transfers",
+        json={
+            "sender": "Alice",
+            "receiver": "Bob",
+            "points": points
+        }
+    )
+
+    assert response.status_code == 422
+    assert fake_repository.players["Alice"]["score"] == 120
+    assert fake_repository.players["Bob"]["score"] == 90

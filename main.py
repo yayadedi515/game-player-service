@@ -3,6 +3,7 @@ from pydantic import BaseModel, Field
 from psycopg.errors import RestrictViolation
 
 import player_repository
+from transfer_result import TransferResult
 
 
 class PlayerCreate(BaseModel):
@@ -11,6 +12,12 @@ class PlayerCreate(BaseModel):
 
 class ScoreAdd(BaseModel):
     points: int = Field(ge=0)
+
+
+class ScoreTransfer(BaseModel):
+    sender: str
+    receiver: str
+    points: int = Field(gt=0)
 
 
 app = FastAPI(title="Game Player Service")
@@ -125,4 +132,46 @@ def add_player_score(
     return {
         "name": player["name"],
         "score": player["score"]
+    }
+
+
+@app.post("/transfers", status_code=201)
+def transfer_player_score(
+        transfer: ScoreTransfer,
+        repository=Depends(get_player_repository)
+):
+    result = repository.transfer_score(
+        transfer.sender,
+        transfer.receiver,
+        transfer.points
+    )
+
+    if result is TransferResult.PLAYER_NOT_FOUND:
+        raise HTTPException(
+            status_code=404,
+            detail="Player not found"
+        )
+
+    if result is TransferResult.INSUFFICIENT_SCORE:
+        raise HTTPException(
+            status_code=409,
+            detail="Insufficient score"
+        )
+
+    if result is TransferResult.INVALID_REQUEST:
+        raise HTTPException(
+            status_code=422,
+            detail="Invalid transfer"
+        )
+
+    if result is not TransferResult.SUCCESS:
+        raise HTTPException(
+            status_code=500,
+            detail="Unexpected transfer result"
+        )
+
+    return {
+        "sender": transfer.sender.strip(),
+        "receiver": transfer.receiver.strip(),
+        "points": transfer.points
     }

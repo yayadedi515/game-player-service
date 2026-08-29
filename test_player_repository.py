@@ -10,6 +10,7 @@ from player_repository import (
     transfer_score,
     delete_player
 )
+from transfer_result import TransferResult
 
 pytestmark = [
     pytest.mark.integration,
@@ -204,7 +205,7 @@ def test_transfer_score_updates_both_players_and_records_history():
 
     success = transfer_score("Alice", "Bob", 30)
 
-    assert success is True
+    assert success is TransferResult.SUCCESS
 
     player_alice = find_player_by_name("Alice")
     player_bob = find_player_by_name("Bob")
@@ -231,9 +232,9 @@ def test_transfer_score_updates_both_players_and_records_history():
     assert row[3] is not None
 
 
-def test_transfer_score_missing_receiver_returns_false_without_changes():
+def test_transfer_score_missing_receiver_returns_player_not_found():
     result = transfer_score("Alice", "Cindy", 30)
-    assert result is False
+    assert result is TransferResult.PLAYER_NOT_FOUND
 
     player = find_player_by_name("Alice")
     assert player["score"] == 90
@@ -250,12 +251,12 @@ def test_transfer_score_missing_receiver_returns_false_without_changes():
     assert row[0] == 0
 
 
-def test_transfer_score_insufficient_balance_returns_false_without_changes():
+def test_transfer_score_insufficient_balance_returns_insufficient_score():
     create_player("Bob")
 
     result = transfer_score("Alice", "Bob", 150)
 
-    assert result is False
+    assert result is TransferResult.INSUFFICIENT_SCORE
 
     alice = find_player_by_name("Alice")
     bob = find_player_by_name("Bob")
@@ -286,12 +287,12 @@ def test_transfer_score_insufficient_balance_returns_false_without_changes():
             "expected_history_count",
     ),
     [
-        (-1, False, 90, 0, 0),
-        (0, False, 90, 0, 0),
-        (1, True, 89, 1, 1),
-        (89, True, 1, 89, 1),
-        (90, True, 0, 90, 1),
-        (91, False, 90, 0, 0),
+        (-1, TransferResult.INVALID_REQUEST, 90, 0, 0),
+        (0, TransferResult.INVALID_REQUEST, 90, 0, 0),
+        (1, TransferResult.SUCCESS, 89, 1, 1),
+        (89, TransferResult.SUCCESS, 1, 89, 1),
+        (90, TransferResult.SUCCESS, 0, 90, 1),
+        (91, TransferResult.INSUFFICIENT_SCORE, 90, 0, 0),
     ],
 )
 def test_transfer_score_points_boundaries(
@@ -326,23 +327,44 @@ def test_transfer_score_points_boundaries(
 
 
 @pytest.mark.parametrize(
-    ("sender_name", "receiver_name"),
+    (
+        "sender_name",
+        "receiver_name",
+        "expected_result",
+    ),
     [
-        ("        ", "Bob"),
-        ("Alice", "        "),
-        ("Alice", "Alice"),
-        ("Cindy", "Bob"),
+        (
+            "        ",
+            "Bob",
+            TransferResult.INVALID_REQUEST,
+        ),
+        (
+            "Alice",
+            "        ",
+            TransferResult.INVALID_REQUEST,
+        ),
+        (
+            "Alice",
+            "Alice",
+            TransferResult.INVALID_REQUEST,
+        ),
+        (
+            "Cindy",
+            "Bob",
+            TransferResult.PLAYER_NOT_FOUND,
+        ),
     ],
 )
 def test_transfer_score_rejects_invalid_players_without_changes(
         sender_name,
         receiver_name,
+        expected_result,
 ):
     create_player("Bob")
 
     result = transfer_score(sender_name, receiver_name, 30)
 
-    assert result is False
+    assert result is expected_result
 
     alice = find_player_by_name("Alice")
     bob = find_player_by_name("Bob")
@@ -369,7 +391,7 @@ def test_transfer_score_strips_whitespace():
 
     result = transfer_score(" Alice ", " Bob ", 30)
 
-    assert result is True
+    assert result is TransferResult.SUCCESS
     alice = find_player_by_name("Alice")
     bob = find_player_by_name("Bob")
     assert alice is not None
@@ -460,7 +482,7 @@ def test_delete_player_with_transfer_history_raises_restrict_violation():
     create_player("Bob")
     success = transfer_score("Alice", "Bob", 10)
 
-    assert success is True
+    assert success is TransferResult.SUCCESS
 
     with pytest.raises(RestrictViolation):
         delete_player("Alice")
