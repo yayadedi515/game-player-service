@@ -1,17 +1,93 @@
 import pytest
 from fastapi.testclient import TestClient
+from psycopg.errors import RestrictViolation
 
-from main import app, service
+import main
+from main import app
 
 client = TestClient(app)
 
 
+class FakeRepository:
+    def __init__(self):
+        self.players = {
+            "Alice": {
+                "player_id": 1,
+                "name": "Alice",
+                "score": 120,
+                "created_at": None
+            },
+            "Bob": {
+                "player_id": 2,
+                "name": "Bob",
+                "score": 90,
+                "created_at": None
+            }
+        }
+
+        self.restricted_names = set()
+
+    def get_ranking(self):
+        return sorted(
+            self.players.values(),
+            key=lambda player: (
+                -player["score"],
+                player["name"]
+            )
+        )
+
+    def delete_player(self, name):
+        cleaned_name = name.strip()
+
+        if cleaned_name == "":
+            return None
+
+        if cleaned_name in self.restricted_names:
+            raise RestrictViolation(
+                "Player is referenced by transfer history"
+            )
+
+        return self.players.pop(cleaned_name, None)
+
+    def find_player_by_name(self, name):
+        return self.players.get(name.strip())
+
+    def create_player(self, name):
+        cleaned_name = name.strip()
+
+        if cleaned_name == "" or cleaned_name in self.players:
+            return None
+
+        next_player_id = max(
+            player["player_id"]
+            for player in self.players.values()
+        ) + 1
+
+        player = {
+            "player_id": next_player_id,
+            "name": cleaned_name,
+            "score": 0,
+            "created_at": None
+        }
+
+        self.players[cleaned_name] = player
+        return player
+
+
 @pytest.fixture(autouse=True)
-def reset_service():
-    service.players = {
-        "Alice": 120,
-        "Bob": 90
-    }
+def fake_repository():
+    repository = FakeRepository()
+
+    def provide_fake_repository():
+        return repository
+
+    app.dependency_overrides[
+        main.get_player_repository
+    ] = provide_fake_repository
+
+    yield repository
+
+    app.dependency_overrides.clear()
 
 
 def test_health_check():
@@ -35,12 +111,20 @@ def test_get_players_missing_players():
     assert response.json() == {"detail": "Player not found"}
 
 
-def test_get_ranking():
+def test_get_ranking(fake_repository):
+    fake_repository.players["Charlie"] = {
+        "player_id": 3,
+        "name": "Charlie",
+        "score": 150,
+        "created_at": None
+    }
+
     response = client.get("/ranking")
 
     assert response.status_code == 200
     assert response.json() == {
         "ranking": [
+            ["Charlie", 150],
             ["Alice", 120],
             ["Bob", 90]
         ]
@@ -104,3 +188,36 @@ def test_delete_player_not_found():
     )
     assert response.status_code == 404
     assert response.json() == {"detail": "Player not found"}
+
+
+def test_get_player_uses_repository_dependency(fake_repository):
+    fake_repository.players["Diana"] = {
+        "player_id": 7,
+        "name": "Diana",
+        "score": 345,
+        "created_at": None
+    }
+
+    response = client.get("/players/Diana")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "name": "Diana",
+        "score": 345
+    }
+
+
+def test_delete_player_with_transfer_history_returns_conflict(
+    fake_repository
+):
+    fake_repository.restricted_names.add("Alice")
+
+    response = client.delete("/players/Alice")
+
+    assert response.status_code == 409
+    assert response.json() == {
+        "detail": "Player has transfer history"
+    }
+
+    player = fake_repository.find_player_by_name("Alice")
+    assert player is not None

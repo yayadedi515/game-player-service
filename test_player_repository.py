@@ -11,38 +11,10 @@ from player_repository import (
     delete_player
 )
 
-TEST_DATABASE = "game_player_service_test"
-pytestmark = pytest.mark.integration
-
-
-@pytest.fixture(autouse=True)
-def reset_test_database(monkeypatch):
-    monkeypatch.setenv("DB_NAME", TEST_DATABASE)
-
-    with get_connection() as connection:
-        assert connection.info.dbname == TEST_DATABASE
-
-        with connection.cursor() as cursor:
-            cursor.execute(
-                "TRUNCATE TABLE transfer_history, players RESTART IDENTITY"
-            )
-            cursor.execute(
-                """
-                INSERT INTO players (name, score)
-                VALUES (%s, %s)
-                """,
-                ("Alice", 90)
-            )
-
-    yield
-
-    with get_connection() as connection:
-        assert connection.info.dbname == TEST_DATABASE
-
-        with connection.cursor() as cursor:
-            cursor.execute(
-                "TRUNCATE TABLE transfer_history, players RESTART IDENTITY"
-            )
+pytestmark = [
+    pytest.mark.integration,
+    pytest.mark.usefixtures("reset_test_database")
+]
 
 
 def test_find_existing_player():
