@@ -73,6 +73,16 @@ class FakeRepository:
         self.players[cleaned_name] = player
         return player
 
+    def add_score(self, name, points):
+        cleaned_name = name.strip()
+        player = self.players.get(cleaned_name)
+
+        if player is None or points < 0:
+            return None
+
+        player["score"] += points
+        return player
+
 
 @pytest.fixture(autouse=True)
 def fake_repository():
@@ -221,3 +231,54 @@ def test_delete_player_with_transfer_history_returns_conflict(
 
     player = fake_repository.find_player_by_name("Alice")
     assert player is not None
+
+
+def test_add_score_success(fake_repository):
+    response = client.patch(
+        "/players/Alice/score",
+        json={"points": 30}
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "name": "Alice",
+        "score": 150
+    }
+
+    assert fake_repository.players["Alice"]["score"] == 150
+
+
+def test_add_score_player_not_found():
+    response = client.patch(
+        "/players/Cindy/score",
+        json={"points": 30}
+    )
+
+    assert response.status_code == 404
+    assert response.json() == {
+        "detail": "Player not found"
+    }
+
+
+def test_add_score_negative_points_returns_422(fake_repository):
+    response = client.patch(
+        "/players/Alice/score",
+        json={"points": -1}
+    )
+
+    assert response.status_code == 422
+    assert fake_repository.players["Alice"]["score"] == 120
+
+
+def test_add_score_zero_points_is_allowed(fake_repository):
+    response = client.patch(
+        "/players/Alice/score",
+        json={"points": 0}
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "name": "Alice",
+        "score": 120
+    }
+    assert fake_repository.players["Alice"]["score"] == 120

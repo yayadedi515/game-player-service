@@ -109,3 +109,24 @@ def test_delete_player_with_transfer_history_returns_conflict_from_postgresql():
         "name": "Alice",
         "score": 80
     }
+
+
+def test_add_score_persists_to_postgresql():
+    response = client.patch(
+        "/players/Alice/score",
+        json={"points": 30}
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "name": "Alice",
+        "score": 120
+    }
+
+    get_response = client.get("/players/Alice")
+
+    assert get_response.status_code == 200
+    assert get_response.json() == {
+        "name": "Alice",
+        "score": 120
+    }

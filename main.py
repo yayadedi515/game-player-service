@@ -1,5 +1,5 @@
 from fastapi import Depends, FastAPI, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from psycopg.errors import RestrictViolation
 
 import player_repository
@@ -7,6 +7,10 @@ import player_repository
 
 class PlayerCreate(BaseModel):
     name: str
+
+
+class ScoreAdd(BaseModel):
+    points: int = Field(ge=0)
 
 
 app = FastAPI(title="Game Player Service")
@@ -98,4 +102,27 @@ def delete_player(
         "message": (
             f"{deleted_player['name']} has been deleted"
         )
+    }
+
+
+@app.patch("/players/{name}/score")
+def add_player_score(
+        name: str,
+        score_add: ScoreAdd,
+        repository=Depends(get_player_repository)
+):
+    player = repository.add_score(
+        name,
+        score_add.points
+    )
+
+    if player is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Player not found"
+        )
+
+    return {
+        "name": player["name"],
+        "score": player["score"]
     }
