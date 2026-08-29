@@ -5,23 +5,21 @@
 プレイヤーの作成・検索・削除、スコア管理、ランキング、プレイヤー間のスコア移動、移動履歴などを実装しています。
 
 > [!IMPORTANT]
-> 現在、FastAPIはインメモリ版の`PlayerService`を使用しています。
-> PostgreSQL版のRepositoryは実装・テスト済みですが、FastAPIとの統合は今後の開発項目です。
+> 現在、FastAPIはPostgreSQL Repositoryと接続されており、プレイヤーの作成・検索・削除・ランキングはPostgreSQLに保存されます。
+> インメモリ版の`PlayerService`は、基礎的な業務ロジックとJSON保存を確認する独立した学習実装として残しています。
 
 ## 現在の構成
 
-| レイヤー                   | 主な機能                                   | データ保存先     |
-|------------------------| -------------------------------------- | ---------- |
-| FastAPI API            | プレイヤー作成・検索・削除、ランキング                    | Pythonの辞書  |
-| PlayerService          | スコア追加、スコア移動、履歴、JSON保存・読込               | メモリ／JSON   |
+| レイヤー                  | 主な機能                                            | データ保存先    |
+|------------------------|-------------------------------------------------|------------|
+| FastAPI API            | プレイヤー作成・検索・削除、ランキング                             | PostgreSQL |
+| PlayerService          | スコア追加、スコア移動、履歴、JSON保存・読込                        | メモリ／JSON   |
 | PostgreSQL Repository  | プレイヤー検索・作成・削除、スコア追加、ランキング、トランザクション付きスコア移動 | PostgreSQL |
 
-現在は次の2つの経路が独立して存在します。
+現在の正式なAPI経路は次のとおりです。
 
 ```text
-HTTP → FastAPI → PlayerService → Pythonの辞書
-
-PlayerRepository → Psycopg → PostgreSQL
+HTTP → FastAPI → PostgreSQL Repository → Psycopg → PostgreSQL
 ```
 
 ## 主な実装内容
@@ -53,7 +51,7 @@ PlayerRepository → Psycopg → PostgreSQL
 
 ## API
 
-FastAPI起動時には、サンプルとして`Alice: 120`、`Bob: 90`がメモリ上に登録されます。
+プレイヤー情報はPostgreSQLの`players`テーブルに保存されます。FastAPI起動時にサンプルプレイヤーは自動登録されません。
 
 | Method   | Endpoint          | 説明       |
 | -------- | ----------------- | -------- |
@@ -109,7 +107,7 @@ python -m uvicorn main:app --reload
 http://127.0.0.1:8000/docs
 ```
 
-現在のAPIはインメモリ版であるため、APIだけを確認する場合はPostgreSQLの準備は不要です。アプリケーションを再起動すると、メモリ上の変更はリセットされます。
+`/health`以外のプレイヤー関連APIを確認するには、PostgreSQLの起動、環境変数の設定、およびテーブルの作成が必要です。
 
 ## PostgreSQLの設定
 
@@ -173,10 +171,10 @@ python -m pytest -m "not integration" -q
 実行結果：
 
 ```text
-17 passed
+19 passed
 ```
 
-PostgreSQL Repository統合テスト：
+PostgreSQL Repository・API統合テスト：
 
 ```bash
 python -m pytest -m integration -q
@@ -185,7 +183,7 @@ python -m pytest -m integration -q
 実行結果：
 
 ```text
-37 passed
+42 passed
 ```
 
 全テスト：
@@ -197,7 +195,7 @@ python -m pytest -q
 現在の実行結果：
 
 ```text
-54 passed
+61 passed
 ```
 
 統合テストには、意図的にPostgreSQLの整数上限超過を発生させるテストが含まれています。スコアの加算処理が途中で失敗した場合でも、送信者の減算、受信者の加算、移動履歴の追加がすべてロールバックされることを確認しています。
@@ -213,8 +211,10 @@ python -m pytest -q
 ├── database/
 │   └── schema.sql
 ├── test_main.py
+├── test_main_integration.py
 ├── test_player_service.py
 ├── test_player_repository.py
+├── conftest.py
 ├── pytest.ini
 ├── requirements.txt
 ├── .env.example
@@ -253,7 +253,6 @@ python -m pytest -q
 
 ## 現在の制約
 
-* FastAPIはまだPostgreSQL Repositoryを使用していません。
 * スコア追加・移動・履歴取得は、まだHTTP APIとして公開していません。
 * 認証・認可は未実装です。
 * Docker化および本番環境へのデプロイは未実装です。
@@ -261,7 +260,7 @@ python -m pytest -q
 
 ## 今後の予定
 
-* FastAPI、Service、PostgreSQL Repositoryの統合
+* スコア追加・移動・履歴取得APIの実装
 * APIエラーを正確に表現する結果型または業務例外の導入
 * Pydanticによるリクエスト境界の検証強化
 * Dockerによる実行環境の構築
@@ -280,25 +279,20 @@ Game Player Service 是一个以游戏玩家管理为场景的 Python 后端作�
 项目已实现玩家创建、查询、删除、积分增加、排行榜、玩家间积分转移、转移历史及 JSON 持久化等功能。
 
 > [!IMPORTANT]
-> 当前 FastAPI 仍使用内存版 `PlayerService`。
-> PostgreSQL Repository 已完成实现和真实数据库集成测试，但尚未与 FastAPI 正式连接。
+> 当前 FastAPI 已正式连接 PostgreSQL Repository，玩家创建、查询、删除和排行榜数据均保存到 PostgreSQL。
+> 内存版 `PlayerService` 作为基础业务逻辑和 JSON 保存功能的独立学习实现保留。
 
 ### 当前架构
 
 | 层级                    | 已实现功能                       | 数据存储       |
 | --------------------- |-----------------------------| ---------- |
-| FastAPI API           | 玩家创建、查询、删除、排行榜              | Python 字典  |
+| FastAPI API           | 玩家创建、查询、删除、排行榜              | PostgreSQL |
 | PlayerService         | 积分增加、积分转移、历史记录、JSON 保存与读取   | 内存／JSON    |
 | PostgreSQL Repository | 玩家查询、创建、删除、积分增加、排行榜、事务化积分转移 | PostgreSQL |
 
-因此，当前存在两条独立路径：
+当前正式 API 的调用路径为：
 
-| 路径                                         | 当前状态          |
-| ------------------------------------------ | ------------- |
-| HTTP → FastAPI → PlayerService → Python 字典 | 已实现并完成 API 测试 |
-| PlayerRepository → Psycopg → PostgreSQL    | 已实现并完成数据库集成测试 |
-
-完整的 `HTTP → FastAPI → Service → Repository → PostgreSQL` 整合仍在开发中。
+`HTTP → FastAPI → PostgreSQL Repository → Psycopg → PostgreSQL`
 
 ### 核心功能
 
@@ -332,7 +326,7 @@ Game Player Service 是一个以游戏玩家管理为场景的 Python 后端作�
 
 ### 当前 API
 
-FastAPI 启动时会在内存中创建示例玩家 `Alice: 120` 和 `Bob: 90`。
+玩家信息保存在 PostgreSQL 的 `players` 表中。FastAPI 启动时不会自动创建示例玩家。
 
 | 请求方法     | 接口                | 说明    |
 | -------- | ----------------- | ----- |
@@ -372,7 +366,7 @@ Swagger API 文档地址：
 http://127.0.0.1:8000/docs
 ```
 
-当前 API 使用内存存储，因此只体验 API 时不需要启动 PostgreSQL。服务重启后，内存中的修改会被重置。
+除 `/health` 外，使用玩家相关 API 前需要启动 PostgreSQL、配置环境变量并创建数据库表。
 
 ### PostgreSQL 配置
 
@@ -415,10 +409,10 @@ python -m pytest -m "not integration" -q
 当前结果：
 
 ```text
-17 passed
+19 passed
 ```
 
-PostgreSQL Repository 集成测试：
+PostgreSQL Repository 与 API 集成测试：
 
 ```bash
 python -m pytest -m integration -q
@@ -427,7 +421,7 @@ python -m pytest -m integration -q
 当前结果：
 
 ```text
-37 passed
+42 passed
 ```
 
 执行全部测试：
@@ -439,7 +433,7 @@ python -m pytest -q
 当前结果：
 
 ```text
-54 passed
+61 passed
 ```
 
 ### 事务设计
@@ -478,7 +472,6 @@ python -m pytest -q
 
 ### 当前限制
 
-* FastAPI 尚未使用 PostgreSQL Repository
 * 积分增加、积分转移和历史查询尚未开放为 HTTP API
 * 尚未实现认证和权限控制
 * 尚未完成 Docker 化和线上部署
@@ -486,7 +479,7 @@ python -m pytest -q
 
 ### 后续计划
 
-* 正式整合 FastAPI、Service 和 PostgreSQL Repository
+* 实现积分增加、积分转移和历史查询 API
 * 使用明确的结果类型或业务异常区分失败原因
 * 加强 Pydantic 请求边界验证
 * 增加 Docker 运行环境
