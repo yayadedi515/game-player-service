@@ -207,3 +207,34 @@ def test_transfer_score_insufficient_score_returns_conflict_from_postgresql():
         "name": "Bob",
         "score": 0
     }
+
+
+def test_get_transfer_history_from_postgresql():
+    create_response = client.post(
+        "/players",
+        json={"name": "Bob"}
+    )
+    assert create_response.status_code == 201
+
+    transfer_response = client.post(
+        "/transfers",
+        json={
+            "sender": "Alice",
+            "receiver": "Bob",
+            "points": 30
+        }
+    )
+    assert transfer_response.status_code == 201
+
+    response = client.get("/transfers")
+
+    assert response.status_code == 200
+
+    history = response.json()["transfers"]
+
+    assert len(history) == 1
+    assert history[0]["transfer_id"] == 1
+    assert history[0]["sender"] == "Alice"
+    assert history[0]["receiver"] == "Bob"
+    assert history[0]["points"] == 30
+    assert history[0]["created_at"] is not None

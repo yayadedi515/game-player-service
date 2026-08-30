@@ -5,16 +5,16 @@
 プレイヤーの作成・検索・削除、スコア管理、ランキング、プレイヤー間のスコア移動、移動履歴などを実装しています。
 
 > [!IMPORTANT]
-> 現在、FastAPIはPostgreSQL Repositoryと接続されており、プレイヤーの作成・検索・削除・スコア追加・スコア移動・ランキング取得をPostgreSQL上で実行できます。
+> 現在、FastAPIはPostgreSQL Repositoryと接続されており、プレイヤーの作成・検索・削除・スコア追加・スコア移動・移動履歴取得・ランキング取得をPostgreSQL上で実行できます。
 > インメモリ版の`PlayerService`は、基礎的な業務ロジックとJSON保存を確認する独立した学習実装として残しています。
 
 ## 現在の構成
 
 | レイヤー                  | 主な機能                                            | データ保存先    |
 |------------------------|-------------------------------------------------|------------|
-| FastAPI API            | プレイヤー作成・検索・削除、スコア追加・移動、ランキング                   | PostgreSQL |
+| FastAPI API            | プレイヤー作成・検索・削除、スコア追加・移動、移動履歴、ランキング              | PostgreSQL |
 | PlayerService          | スコア追加、スコア移動、履歴、JSON保存・読込                        | メモリ／JSON   |
-| PostgreSQL Repository  | プレイヤー検索・作成・削除、スコア追加、ランキング、トランザクション付きスコア移動 | PostgreSQL |
+| PostgreSQL Repository  | プレイヤー検索・作成・削除、スコア追加、ランキング、トランザクション付きスコア移動、移動履歴取得 | PostgreSQL |
 
 現在の正式なAPI経路は次のとおりです。
 
@@ -62,6 +62,7 @@ HTTP → FastAPI → PostgreSQL Repository → Psycopg → PostgreSQL
 | `DELETE` | `/players/{name}` | プレイヤーの削除 |
 | `PATCH`  | `/players/{name}/score` | スコアの追加 |
 | `POST`   | `/transfers`             | スコアの移動 |
+| `GET`    | `/transfers`             | 移動履歴の取得 |
 
 プレイヤー作成リクエストの例：
 
@@ -181,7 +182,7 @@ python -m pytest -m "not integration" -q
 実行結果：
 
 ```text
-29 passed
+31 passed
 ```
 
 PostgreSQL Repository・API統合テスト：
@@ -193,7 +194,7 @@ python -m pytest -m integration -q
 実行結果：
 
 ```text
-45 passed
+49 passed
 ```
 
 全テスト：
@@ -205,7 +206,7 @@ python -m pytest -q
 現在の実行結果：
 
 ```text
-74 passed
+80 passed
 ```
 
 統合テストには、意図的にPostgreSQLの整数上限超過を発生させるテストが含まれています。スコアの加算処理が途中で失敗した場合でも、送信者の減算、受信者の加算、移動履歴の追加がすべてロールバックされることを確認しています。
@@ -267,14 +268,12 @@ python -m pytest -q
 
 ## 現在の制約
 
-* 履歴取得は、まだHTTP APIとして公開していません。
 * 認証・認可は未実装です。
 * Docker化および本番環境へのデプロイは未実装です。
 * 本プロジェクトは開発中のポートフォリオであり、本番運用を目的とした完成済みシステムではありません。
 
 ## 今後の予定
 
-* 履歴取得APIの実装
 * Pydanticによるリクエスト境界の検証強化
 * Dockerによる実行環境の構築
 * CIによる自動テスト
@@ -292,16 +291,16 @@ Game Player Service 是一个以游戏玩家管理为场景的 Python 后端作�
 项目已实现玩家创建、查询、删除、积分增加、排行榜、玩家间积分转移、转移历史及 JSON 持久化等功能。
 
 > [!IMPORTANT]
-> 当前 FastAPI 已正式连接 PostgreSQL Repository，可以使用 PostgreSQL 完成玩家创建、查询、删除、积分增加、积分转移和排行榜获取。
+> 当前 FastAPI 已正式连接 PostgreSQL Repository，可以使用 PostgreSQL 完成玩家创建、查询、删除、积分增加、积分转移、转移历史查询和排行榜获取。
 > 内存版 `PlayerService` 作为基础业务逻辑和 JSON 保存功能的独立学习实现保留。
 
 ### 当前架构
 
 | 层级                    | 已实现功能                       | 数据存储       |
 | --------------------- |-----------------------------| ---------- |
-| FastAPI API           | 玩家创建、查询、删除、积分增加、积分转移、排行榜     | PostgreSQL |
+| FastAPI API           | 玩家创建、查询、删除、积分增加、积分转移、转移历史、排行榜 | PostgreSQL |
 | PlayerService         | 积分增加、积分转移、历史记录、JSON 保存与读取   | 内存／JSON    |
-| PostgreSQL Repository | 玩家查询、创建、删除、积分增加、排行榜、事务化积分转移 | PostgreSQL |
+| PostgreSQL Repository | 玩家查询、创建、删除、积分增加、排行榜、事务化积分转移、转移历史查询 | PostgreSQL |
 
 当前正式 API 的调用路径为：
 
@@ -350,6 +349,7 @@ Game Player Service 是一个以游戏玩家管理为场景的 Python 后端作�
 | `DELETE` | `/players/{name}` | 删除玩家  |
 | `PATCH`  | `/players/{name}/score` | 增加积分 |
 | `POST`   | `/transfers`             | 转移积分 |
+| `GET`    | `/transfers`             | 查询转移历史 |
 
 创建玩家的请求示例：
 
@@ -432,7 +432,7 @@ python -m pytest -m "not integration" -q
 当前结果：
 
 ```text
-29 passed
+31 passed
 ```
 
 PostgreSQL Repository 与 API 集成测试：
@@ -444,7 +444,7 @@ python -m pytest -m integration -q
 当前结果：
 
 ```text
-45 passed
+49 passed
 ```
 
 执行全部测试：
@@ -456,7 +456,7 @@ python -m pytest -q
 当前结果：
 
 ```text
-74 passed
+80 passed
 ```
 
 ### 事务设计
@@ -499,14 +499,12 @@ python -m pytest -q
 
 ### 当前限制
 
-* 转移历史查询尚未开放为 HTTP API
 * 尚未实现认证和权限控制
 * 尚未完成 Docker 化和线上部署
 * 当前是持续开发中的作品集项目，不能视为已经完成的生产级系统
 
 ### 后续计划
 
-* 实现转移历史查询 API
 * 加强 Pydantic 请求边界验证
 * 增加 Docker 运行环境
 * 使用 CI 自动运行测试

@@ -175,3 +175,12 @@ def transfer_player_score(
         "receiver": transfer.receiver.strip(),
         "points": transfer.points
     }
+
+
+@app.get("/transfers")
+def get_transfer_history(
+        repository=Depends(get_player_repository)
+):
+    return {
+        "transfers": repository.get_transfer_history()
+    }

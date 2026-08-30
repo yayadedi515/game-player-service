@@ -195,6 +195,41 @@ def transfer_score(
     return TransferResult.SUCCESS
 
 
+def get_transfer_history() -> list[dict]:
+    query = """
+        SELECT
+            history.transfer_id,
+            sender.name,
+            receiver.name,
+            history.points,
+            history.created_at
+        FROM transfer_history AS history
+        JOIN players AS sender
+            ON sender.player_id = history.sender_id
+        JOIN players AS receiver
+            ON receiver.player_id = history.receiver_id
+        ORDER BY history.transfer_id DESC
+    """
+
+    with get_connection() as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(query)
+            rows = cursor.fetchall()
+
+    result = []
+
+    for row in rows:
+        result.append({
+            "transfer_id": row[0],
+            "sender": row[1],
+            "receiver": row[2],
+            "points": row[3],
+            "created_at": row[4]
+        })
+
+    return result
+
+
 def delete_player(name: str) -> dict | None:
     cleaned_name = name.strip()
 

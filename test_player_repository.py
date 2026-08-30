@@ -8,7 +8,8 @@ from player_repository import (
     add_score,
     get_ranking,
     transfer_score,
-    delete_player
+    delete_player,
+    get_transfer_history,
 )
 from transfer_result import TransferResult
 
@@ -491,3 +492,61 @@ def test_delete_player_with_transfer_history_raises_restrict_violation():
 
     assert result is not None
     assert result["score"] == 80
+
+
+def test_get_transfer_history_returns_transfer():
+    create_player("Bob")
+
+    result = transfer_score(
+        "Alice",
+        "Bob",
+        30
+    )
+    assert result is TransferResult.SUCCESS
+
+    history = get_transfer_history()
+
+    assert len(history) == 1
+    assert history[0]["transfer_id"] == 1
+    assert history[0]["sender"] == "Alice"
+    assert history[0]["receiver"] == "Bob"
+    assert history[0]["points"] == 30
+    assert history[0]["created_at"] is not None
+
+
+def test_get_transfer_history_empty_returns_empty_list():
+    history = get_transfer_history()
+
+    assert history == []
+
+
+def test_get_transfer_history_orders_newest_first():
+    create_player("Bob")
+
+    first_result = transfer_score(
+        "Alice",
+        "Bob",
+        30
+    )
+    second_result = transfer_score(
+        "Bob",
+        "Alice",
+        10
+    )
+
+    assert first_result is TransferResult.SUCCESS
+    assert second_result is TransferResult.SUCCESS
+
+    history = get_transfer_history()
+
+    assert len(history) == 2
+
+    assert history[0]["transfer_id"] == 2
+    assert history[0]["sender"] == "Bob"
+    assert history[0]["receiver"] == "Alice"
+    assert history[0]["points"] == 10
+
+    assert history[1]["transfer_id"] == 1
+    assert history[1]["sender"] == "Alice"
+    assert history[1]["receiver"] == "Bob"
+    assert history[1]["points"] == 30

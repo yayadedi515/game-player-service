@@ -27,6 +27,7 @@ class FakeRepository:
         }
 
         self.restricted_names = set()
+        self.transfer_history = []
 
     def get_ranking(self):
         return sorted(
@@ -107,7 +108,23 @@ class FakeRepository:
 
         sender_player["score"] -= points
         receiver_player["score"] += points
+        transfer_id = len(self.transfer_history) + 1
+
+        self.transfer_history.insert(0, {
+            "transfer_id": transfer_id,
+            "sender": cleaned_sender,
+            "receiver": cleaned_receiver,
+            "points": points,
+            "created_at": None
+        })
+
         return TransferResult.SUCCESS
+
+    def get_transfer_history(self):
+        return [
+            transfer.copy()
+            for transfer in self.transfer_history
+        ]
 
 @pytest.fixture(autouse=True)
 def fake_repository():
@@ -405,3 +422,39 @@ def test_transfer_score_non_positive_points_returns_422(
     assert response.status_code == 422
     assert fake_repository.players["Alice"]["score"] == 120
     assert fake_repository.players["Bob"]["score"] == 90
+
+
+def test_get_transfer_history_returns_transfers(fake_repository):
+    transfer_response = client.post(
+        "/transfers",
+        json={
+            "sender": "Alice",
+            "receiver": "Bob",
+            "points": 30
+        }
+    )
+    assert transfer_response.status_code == 201
+
+    response = client.get("/transfers")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "transfers": [
+            {
+                "transfer_id": 1,
+                "sender": "Alice",
+                "receiver": "Bob",
+                "points": 30,
+                "created_at": None
+            }
+        ]
+    }
+
+
+def test_get_transfer_history_empty_returns_empty_list():
+    response = client.get("/transfers")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "transfers": []
+    }
