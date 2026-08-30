@@ -59,10 +59,19 @@ def test_get_ranking_from_postgresql():
     assert response.status_code == 200
     assert response.json() == {
         "ranking": [
-            ["Alice", 90],
-            ["Bob", 0],
-            ["Charlie", 0]
-        ]
+    {
+        "name": "Alice",
+        "score": 90
+    },
+    {
+        "name": "Bob",
+        "score": 0
+    },
+    {
+        "name": "Charlie",
+        "score": 0
+    }
+    ]
     }
 
 
@@ -237,4 +246,52 @@ def test_get_transfer_history_from_postgresql():
     assert history[0]["sender"] == "Alice"
     assert history[0]["receiver"] == "Bob"
     assert history[0]["points"] == 30
+    assert history[0]["created_at"] is not None
+
+
+def test_get_transfer_history_pagination_from_postgresql():
+    create_response = client.post(
+        "/players",
+        json={"name": "Bob"}
+    )
+    assert create_response.status_code == 201
+
+    transfers = [
+        {
+            "sender": "Alice",
+            "receiver": "Bob",
+            "points": 30
+        },
+        {
+            "sender": "Bob",
+            "receiver": "Alice",
+            "points": 10
+        },
+        {
+            "sender": "Alice",
+            "receiver": "Bob",
+            "points": 20
+        },
+    ]
+
+    for transfer in transfers:
+        response = client.post(
+            "/transfers",
+            json=transfer
+        )
+        assert response.status_code == 201
+
+    response = client.get(
+        "/transfers?limit=1&offset=1"
+    )
+
+    assert response.status_code == 200
+
+    history = response.json()["transfers"]
+
+    assert len(history) == 1
+    assert history[0]["transfer_id"] == 2
+    assert history[0]["sender"] == "Bob"
+    assert history[0]["receiver"] == "Alice"
+    assert history[0]["points"] == 10
     assert history[0]["created_at"] is not None

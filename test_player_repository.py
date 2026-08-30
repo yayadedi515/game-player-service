@@ -550,3 +550,52 @@ def test_get_transfer_history_orders_newest_first():
     assert history[1]["sender"] == "Alice"
     assert history[1]["receiver"] == "Bob"
     assert history[1]["points"] == 30
+
+
+def test_get_transfer_history_supports_pagination():
+    create_player("Bob")
+
+    results = [
+        transfer_score("Alice", "Bob", 30),
+        transfer_score("Bob", "Alice", 10),
+        transfer_score("Alice", "Bob", 20),
+    ]
+
+    assert results == [
+        TransferResult.SUCCESS,
+        TransferResult.SUCCESS,
+        TransferResult.SUCCESS,
+    ]
+
+    history = get_transfer_history(
+        limit=1,
+        offset=1
+    )
+
+    assert len(history) == 1
+    assert history[0]["transfer_id"] == 2
+    assert history[0]["sender"] == "Bob"
+    assert history[0]["receiver"] == "Alice"
+    assert history[0]["points"] == 10
+
+
+@pytest.mark.parametrize(
+    ("limit", "offset"),
+    [
+        (0, 0),
+        (101, 0),
+        (20, -1),
+    ],
+)
+def test_get_transfer_history_rejects_invalid_pagination(
+        limit,
+        offset
+):
+    with pytest.raises(
+        ValueError,
+        match="Invalid pagination parameters"
+    ):
+        get_transfer_history(
+            limit=limit,
+            offset=offset
+        )

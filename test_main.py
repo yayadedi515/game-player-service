@@ -11,6 +11,8 @@ client = TestClient(app)
 
 class FakeRepository:
     def __init__(self):
+        self.transfer_score_call_count = 0
+        self.get_transfer_history_call_count = 0
         self.players = {
             "Alice": {
                 "player_id": 1,
@@ -31,7 +33,10 @@ class FakeRepository:
 
     def get_ranking(self):
         return sorted(
-            self.players.values(),
+            [
+                player.copy()
+                for player in self.players.values()
+            ],
             key=lambda player: (
                 -player["score"],
                 player["name"]
@@ -86,6 +91,7 @@ class FakeRepository:
         return player
 
     def transfer_score(self, sender, receiver, points):
+        self.transfer_score_call_count += 1
         cleaned_sender = sender.strip()
         cleaned_receiver = receiver.strip()
 
@@ -120,10 +126,19 @@ class FakeRepository:
 
         return TransferResult.SUCCESS
 
-    def get_transfer_history(self):
+    def get_transfer_history(
+            self,
+            limit=20,
+            offset=0
+    ):
+        self.get_transfer_history_call_count += 1
+        selected_transfers = self.transfer_history[
+                             offset:offset + limit
+                             ]
+
         return [
             transfer.copy()
-            for transfer in self.transfer_history
+            for transfer in selected_transfers
         ]
 
 @pytest.fixture(autouse=True)
@@ -176,9 +191,18 @@ def test_get_ranking(fake_repository):
     assert response.status_code == 200
     assert response.json() == {
         "ranking": [
-            ["Charlie", 150],
-            ["Alice", 120],
-            ["Bob", 90]
+            {
+                "name": "Charlie",
+                "score": 150
+            },
+            {
+                "name": "Alice",
+                "score": 120
+            },
+            {
+                "name": "Bob",
+                "score": 90
+            }
         ]
     }
 
@@ -219,8 +243,10 @@ def test_create_player_empty_name():
         "/players",
         json={"name": "    "}
     )
-    assert response.status_code == 400
-    assert response.json() == {"detail": "Invalid or duplicate player"}
+    detail = response.json()["detail"]
+
+    assert detail[0]["loc"] == ["body", "name"]
+    assert detail[0]["type"] == "string_too_short"
 
 
 def test_delete_player_success():
@@ -398,10 +424,14 @@ def test_transfer_score_same_player_returns_422(fake_repository):
     )
 
     assert response.status_code == 422
-    assert response.json() == {
-        "detail": "Invalid transfer"
-    }
+    detail = response.json()["detail"]
 
+    assert detail[0]["loc"] == ["body"]
+    assert detail[0]["type"] == "value_error"
+    assert (
+            "Sender and receiver must be different"
+            in detail[0]["msg"]
+    )
     assert fake_repository.players["Alice"]["score"] == 120
 
 
@@ -458,3 +488,287 @@ def test_get_transfer_history_empty_returns_empty_list():
     assert response.json() == {
         "transfers": []
     }
+
+
+def test_create_player_name_with_50_characters_is_allowed():
+    name = "A" * 50
+
+    response = client.post(
+        "/players",
+        json={"name": name}
+    )
+
+    assert response.status_code == 201
+    assert response.json() == {
+        "name": name,
+        "score": 0
+    }
+
+
+def test_create_player_name_longer_than_50_returns_422(
+        fake_repository
+):
+    name = "A" * 51
+
+    response = client.post(
+        "/players",
+        json={"name": name}
+    )
+
+    assert response.status_code == 422
+    assert name not in fake_repository.players
+
+
+def test_get_player_blank_name_returns_422():
+    response = client.get("/players/%20%20%20")
+
+    assert response.status_code == 422
+
+
+@pytest.mark.parametrize(
+    ("method", "path", "body"),
+    [
+        ("DELETE", "/players/%20%20%20", None),
+        (
+            "PATCH",
+            "/players/%20%20%20/score",
+            {"points": 10}
+        ),
+    ],
+)
+def test_player_path_blank_name_returns_422(
+        method,
+        path,
+        body
+):
+    response = client.request(
+        method,
+        path,
+        json=body
+    )
+
+    assert response.status_code == 422
+
+
+@pytest.mark.parametrize(
+    ("sender", "receiver"),
+    [
+        ("A" * 51, "Bob"),
+        ("Alice", "B" * 51),
+    ],
+)
+def test_transfer_player_name_longer_than_50_returns_422(
+        sender,
+        receiver,
+        fake_repository
+):
+    response = client.post(
+        "/transfers",
+        json={
+            "sender": sender,
+            "receiver": receiver,
+            "points": 10
+        }
+    )
+
+    assert response.status_code == 422
+    assert fake_repository.transfer_history == []
+
+
+def test_transfer_same_player_is_rejected_before_repository(
+        fake_repository
+):
+    response = client.post(
+        "/transfers",
+        json={
+            "sender": "  Alice  ",
+            "receiver": "Alice",
+            "points": 10
+        }
+    )
+
+    assert response.status_code == 422
+    assert fake_repository.transfer_score_call_count == 0
+
+
+def test_get_player_openapi_uses_player_response():
+    openapi_schema = app.openapi()
+
+    response_schema = (
+        openapi_schema["paths"]["/players/{name}"]
+        ["get"]["responses"]["200"]
+        ["content"]["application/json"]["schema"]
+    )
+
+    assert response_schema == {
+        "$ref": "#/components/schemas/PlayerResponse"
+    }
+
+
+@pytest.mark.parametrize(
+    ("path", "method", "status_code"),
+    [
+        ("/players", "post", "201"),
+        ("/players/{name}/score", "patch", "200"),
+    ],
+)
+def test_player_write_openapi_uses_player_response(
+        path,
+        method,
+        status_code
+):
+    openapi_schema = app.openapi()
+
+    response_schema = (
+        openapi_schema["paths"][path]
+        [method]["responses"][status_code]
+        ["content"]["application/json"]["schema"]
+    )
+
+    assert response_schema == {
+        "$ref": "#/components/schemas/PlayerResponse"
+    }
+
+
+@pytest.mark.parametrize(
+    (
+        "method",
+        "status_code",
+        "response_model_name"
+    ),
+    [
+        ("post", "201", "TransferResponse"),
+        ("get", "200", "TransferHistoryResponse"),
+    ],
+)
+def test_transfer_openapi_uses_response_models(
+        method,
+        status_code,
+        response_model_name
+):
+    openapi_schema = app.openapi()
+
+    response_schema = (
+        openapi_schema["paths"]["/transfers"]
+        [method]["responses"][status_code]
+        ["content"]["application/json"]["schema"]
+    )
+
+    assert response_schema == {
+        "$ref": (
+            "#/components/schemas/"
+            f"{response_model_name}"
+        )
+    }
+
+
+def test_ranking_openapi_uses_ranking_response():
+    openapi_schema = app.openapi()
+
+    response_schema = (
+        openapi_schema["paths"]["/ranking"]
+        ["get"]["responses"]["200"]
+        ["content"]["application/json"]["schema"]
+    )
+
+    assert response_schema == {
+        "$ref": "#/components/schemas/RankingResponse"
+    }
+
+
+@pytest.mark.parametrize(
+    (
+        "path",
+        "method",
+        "response_model_name"
+    ),
+    [
+        ("/health", "get", "HealthResponse"),
+        (
+            "/players/{name}",
+            "delete",
+            "PlayerDeleteResponse"
+        ),
+    ],
+)
+def test_simple_openapi_uses_response_models(
+        path,
+        method,
+        response_model_name
+):
+    openapi_schema = app.openapi()
+
+    response_schema = (
+        openapi_schema["paths"][path]
+        [method]["responses"]["200"]
+        ["content"]["application/json"]["schema"]
+    )
+
+    assert response_schema == {
+        "$ref": (
+            "#/components/schemas/"
+            f"{response_model_name}"
+        )
+    }
+
+
+def test_get_transfer_history_supports_pagination():
+    transfers = [
+        {
+            "sender": "Alice",
+            "receiver": "Bob",
+            "points": 10
+        },
+        {
+            "sender": "Bob",
+            "receiver": "Alice",
+            "points": 5
+        },
+        {
+            "sender": "Alice",
+            "receiver": "Bob",
+            "points": 20
+        },
+    ]
+
+    for transfer in transfers:
+        response = client.post(
+            "/transfers",
+            json=transfer
+        )
+        assert response.status_code == 201
+
+    response = client.get(
+        "/transfers?limit=1&offset=1"
+    )
+
+    assert response.status_code == 200
+
+    history = response.json()["transfers"]
+
+    assert len(history) == 1
+    assert history[0]["transfer_id"] == 2
+
+
+@pytest.mark.parametrize(
+    "query",
+    [
+        "limit=0",
+        "limit=101",
+        "offset=-1",
+    ],
+)
+def test_get_transfer_history_rejects_invalid_pagination(
+        query,
+        fake_repository
+):
+    response = client.get(
+        f"/transfers?{query}"
+    )
+
+    assert response.status_code == 422
+    assert (
+        fake_repository
+        .get_transfer_history_call_count
+        == 0
+    )

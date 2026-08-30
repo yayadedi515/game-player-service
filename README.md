@@ -62,7 +62,7 @@ HTTP → FastAPI → PostgreSQL Repository → Psycopg → PostgreSQL
 | `DELETE` | `/players/{name}` | プレイヤーの削除 |
 | `PATCH`  | `/players/{name}/score` | スコアの追加 |
 | `POST`   | `/transfers`             | スコアの移動 |
-| `GET`    | `/transfers`             | 移動履歴の取得 |
+| `GET`    | `/transfers`             | 移動履歴の取得（ページング対応） |
 
 プレイヤー作成リクエストの例：
 
@@ -81,6 +81,16 @@ HTTP → FastAPI → PostgreSQL Repository → Psycopg → PostgreSQL
 スコア移動リクエストの例：`{"sender": "Alice", "receiver": "Bob", "points": 30}`
 
 `points`には1以上の整数を指定します。送信者と受信者には異なるプレイヤーを指定する必要があります。
+
+プレイヤー名は、前後の空白を除去した後、1文字以上50文字以下である必要があります。
+
+移動履歴のページング例：
+
+```text
+GET /transfers?limit=20&offset=0
+```
+
+`limit`は1以上100以下で、デフォルトは20です。`offset`は0以上で、デフォルトは0です。
 
 ## セットアップ
 
@@ -182,7 +192,7 @@ python -m pytest -m "not integration" -q
 実行結果：
 
 ```text
-31 passed
+51 passed
 ```
 
 PostgreSQL Repository・API統合テスト：
@@ -194,7 +204,7 @@ python -m pytest -m integration -q
 実行結果：
 
 ```text
-49 passed
+54 passed
 ```
 
 全テスト：
@@ -206,7 +216,7 @@ python -m pytest -q
 現在の実行結果：
 
 ```text
-80 passed
+105 passed
 ```
 
 統合テストには、意図的にPostgreSQLの整数上限超過を発生させるテストが含まれています。スコアの加算処理が途中で失敗した場合でも、送信者の減算、受信者の加算、移動履歴の追加がすべてロールバックされることを確認しています。
@@ -216,6 +226,7 @@ python -m pytest -q
 ```text
 .
 ├── main.py
+├── schemas.py
 ├── player_service.py
 ├── player_repository.py
 ├── database.py
@@ -265,6 +276,12 @@ python -m pytest -q
 * SQLインジェクション形式の入力
 * 同点ランキング
 * トランザクション途中のデータベース例外
+
+### APIの入力・出力契約
+
+Pydanticを使用して、プレイヤー名の空白除去・文字数制限、スコアとページングパラメータの範囲、スコア移動時の送信者と受信者が異なることを検証しています。
+
+また、すべての成功レスポンスにレスポンスモデルを設定し、FastAPIが返却データを検証するとともに、Swaggerに明確なAPI仕様を表示します。
 
 ## 現在の制約
 
@@ -349,7 +366,7 @@ Game Player Service 是一个以游戏玩家管理为场景的 Python 后端作�
 | `DELETE` | `/players/{name}` | 删除玩家  |
 | `PATCH`  | `/players/{name}/score` | 增加积分 |
 | `POST`   | `/transfers`             | 转移积分 |
-| `GET`    | `/transfers`             | 查询转移历史 |
+| `GET`    | `/transfers`             | 查询转移历史（支持分页） |
 
 创建玩家的请求示例：
 
@@ -368,6 +385,16 @@ Game Player Service 是一个以游戏玩家管理为场景的 Python 后端作�
 积分转移请求示例：`{"sender": "Alice", "receiver": "Bob", "points": 30}`
 
 `points` 必须是大于或等于 1 的整数，发送者和接收者必须是不同玩家。
+
+玩家名去除首尾空格后，长度必须为1～50个字符。
+
+转移历史分页示例：
+
+```text
+GET /transfers?limit=20&offset=0
+```
+
+`limit`的范围是1～100，默认值为20；`offset`必须大于或等于0，默认值为0。
 
 ### 快速运行 API
 
@@ -432,7 +459,7 @@ python -m pytest -m "not integration" -q
 当前结果：
 
 ```text
-31 passed
+51 passed
 ```
 
 PostgreSQL Repository 与 API 集成测试：
@@ -444,7 +471,7 @@ python -m pytest -m integration -q
 当前结果：
 
 ```text
-49 passed
+54 passed
 ```
 
 执行全部测试：
@@ -456,7 +483,7 @@ python -m pytest -q
 当前结果：
 
 ```text
-80 passed
+105 passed
 ```
 
 ### 事务设计
@@ -480,6 +507,12 @@ python -m pytest -q
 ### 明确的业务结果
 
 积分转移不再只返回`True`／`False`，而是使用`TransferResult` Enum 区分成功、玩家不存在、积分不足和非法请求。FastAPI 再将这些业务结果分别转换为`201`、`404`、`409`和`422`状态码。
+
+### API 输入与输出契约
+
+项目使用 Pydantic 检查玩家名的首尾空格和长度、积分与分页参数的范围，以及积分转移时发送者和接收者不能相同。
+
+所有成功响应都配置了响应模型，使 FastAPI 能在返回前检查数据结构，并在 Swagger 中生成明确的 API 说明。
 
 ### 测试覆盖的代表场景
 

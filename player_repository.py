@@ -195,7 +195,19 @@ def transfer_score(
     return TransferResult.SUCCESS
 
 
-def get_transfer_history() -> list[dict]:
+def get_transfer_history(
+        limit: int = 20,
+        offset: int = 0
+) -> list[dict]:
+    if (
+            limit < 1
+            or limit > 100
+            or offset < 0
+    ):
+        raise ValueError(
+            "Invalid pagination parameters"
+        )
+
     query = """
         SELECT
             history.transfer_id,
@@ -209,11 +221,16 @@ def get_transfer_history() -> list[dict]:
         JOIN players AS receiver
             ON receiver.player_id = history.receiver_id
         ORDER BY history.transfer_id DESC
+        LIMIT %s
+        OFFSET %s
     """
 
     with get_connection() as connection:
         with connection.cursor() as cursor:
-            cursor.execute(query)
+            cursor.execute(
+                query,
+                (limit, offset)
+            )
             rows = cursor.fetchall()
 
     result = []

@@ -1,23 +1,22 @@
-from fastapi import Depends, FastAPI, HTTPException
-from pydantic import BaseModel, Field
+from typing import Annotated
+
+from fastapi import Depends, FastAPI, HTTPException, Query
 from psycopg.errors import RestrictViolation
 
 import player_repository
+from schemas import (
+    HealthResponse,
+    PlayerCreate,
+    PlayerDeleteResponse,
+    PlayerName,
+    PlayerResponse,
+    RankingResponse,
+    ScoreAdd,
+    ScoreTransfer,
+    TransferHistoryResponse,
+    TransferResponse,
+)
 from transfer_result import TransferResult
-
-
-class PlayerCreate(BaseModel):
-    name: str
-
-
-class ScoreAdd(BaseModel):
-    points: int = Field(ge=0)
-
-
-class ScoreTransfer(BaseModel):
-    sender: str
-    receiver: str
-    points: int = Field(gt=0)
 
 
 app = FastAPI(title="Game Player Service")
@@ -27,14 +26,20 @@ def get_player_repository():
     return player_repository
 
 
-@app.get("/health")
+@app.get(
+    "/health",
+    response_model=HealthResponse
+)
 def health_check():
     return {"status": "ok"}
 
 
-@app.get("/players/{name}")
+@app.get(
+    "/players/{name}",
+    response_model=PlayerResponse
+)
 def get_player(
-    name: str,
+    name: PlayerName,
     repository=Depends(get_player_repository)
 ):
     player = repository.find_player_by_name(name)
@@ -51,14 +56,20 @@ def get_player(
     }
 
 
-@app.get("/ranking")
+@app.get(
+    "/ranking",
+    response_model=RankingResponse
+)
 def get_ranking(
     repository=Depends(get_player_repository)
 ):
     players = repository.get_ranking()
 
     ranking = [
-        [player["name"], player["score"]]
+        {
+            "name": player["name"],
+            "score": player["score"]
+        }
         for player in players
     ]
 
@@ -67,7 +78,11 @@ def get_ranking(
     }
 
 
-@app.post("/players", status_code=201)
+@app.post(
+    "/players",
+    status_code=201,
+    response_model=PlayerResponse
+)
 def create_player(
     player: PlayerCreate,
     repository=Depends(get_player_repository)
@@ -86,9 +101,13 @@ def create_player(
     }
 
 
-@app.delete("/players/{name}", status_code=200)
+@app.delete(
+    "/players/{name}",
+    status_code=200,
+    response_model=PlayerDeleteResponse
+)
 def delete_player(
-    name: str,
+    name: PlayerName,
     repository=Depends(get_player_repository)
 ):
     try:
@@ -112,9 +131,12 @@ def delete_player(
     }
 
 
-@app.patch("/players/{name}/score")
+@app.patch(
+    "/players/{name}/score",
+    response_model=PlayerResponse
+)
 def add_player_score(
-        name: str,
+        name: PlayerName,
         score_add: ScoreAdd,
         repository=Depends(get_player_repository)
 ):
@@ -135,7 +157,11 @@ def add_player_score(
     }
 
 
-@app.post("/transfers", status_code=201)
+@app.post(
+    "/transfers",
+    status_code=201,
+    response_model=TransferResponse
+)
 def transfer_player_score(
         transfer: ScoreTransfer,
         repository=Depends(get_player_repository)
@@ -177,10 +203,24 @@ def transfer_player_score(
     }
 
 
-@app.get("/transfers")
+@app.get(
+    "/transfers",
+    response_model=TransferHistoryResponse
+)
 def get_transfer_history(
+        limit: Annotated[
+            int,
+            Query(ge=1, le=100)
+        ] = 20,
+        offset: Annotated[
+            int,
+            Query(ge=0)
+        ] = 0,
         repository=Depends(get_player_repository)
 ):
     return {
-        "transfers": repository.get_transfer_history()
+        "transfers": repository.get_transfer_history(
+            limit=limit,
+            offset=offset
+        )
     }
