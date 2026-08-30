@@ -1,168 +1,190 @@
-from pathlib import Path
-from tempfile import TemporaryDirectory
-
+from transfer_result import TransferResult
 from player_service import PlayerService
 
 
-def test_basic_operations():
-    service = PlayerService()
+class FakeRepository:
+    def __init__(self):
+        self.requested_name = None
+        self.created_name = None
+        self.ranking_requested = False
+        self.score_request = None
+        self.deleted_name = None
+        self.transfer_request = None
+        self.history_request = None
 
-    assert service.add_player("Alice") is True
-    assert service.add_player("Alice") is False
-    assert service.add_player("   ") is False
+    def find_player_by_name(self, name):
+        self.requested_name = name
 
-    assert service.add_score("Alice", 120) is True
-    assert service.add_score("Bob", 50) is False
-    assert service.add_score("Alice", -10) is False
-
-    assert service.get_score(" Alice ") == 120
-    assert service.get_score("Bob") is None
-
-    assert service.get_ranking() == [("Alice", 120)]
-
-    assert service.remove_player("Alice") is True
-    assert service.remove_player("Alice") is False
-
-
-def test_data_isolation():
-    original = {
-        "Alice": {
+        return {
+            "player_id": 1,
+            "name": "Alice",
             "score": 120,
-            "items": []
+            "created_at": None
         }
-    }
-    service_a = PlayerService(original)
-    service_b = PlayerService(original)
-    service_a.players["Alice"]["items"].append("Sword")
-    assert service_a.players["Alice"]["items"] == ["Sword"]
-    assert service_b.players["Alice"]["items"] == []
-    assert original["Alice"]["items"] == []
 
+    def create_player(self, name):
+        self.created_name = name
 
-def test_persistence():
-    service_a = PlayerService({
-        "Alice": 120,
-        "Bob": 90
-    })
-
-    with TemporaryDirectory() as temp_directory:
-        filename = Path(temp_directory) / "players.json"
-
-        assert service_a.save(filename) is True
-
-        service_b = PlayerService()
-        assert service_b.load(filename) is True
-        assert service_b.players == {
-            "Alice": 120,
-            "Bob": 90
+        return {
+            "player_id": 2,
+            "name": name,
+            "score": 0,
+            "created_at": None
         }
-        assert service_b.players is not service_a.players
 
-        service_c = PlayerService({"Charlie": 50})
-        missing_file = Path(temp_directory) / "missing.json"
+    def get_ranking(self):
+        self.ranking_requested = True
 
-        assert service_c.load(missing_file) is False
-        assert service_c.players == {"Charlie": 50}
+        return [
+            {
+                "player_id": 1,
+                "name": "Alice",
+                "score": 120,
+                "created_at": None
+            }
+        ]
 
+    def add_score(self, name, points):
+        self.score_request = (name, points)
 
-def test_transfer_score_success():
-    service = PlayerService({
-        "Alice": 100,
-        "Bob": 20
-    })
+        return {
+            "player_id": 1,
+            "name": name,
+            "score": 150,
+            "created_at": None
+        }
 
-    result = service.transfer_score(
-        " Alice ",
-        " Bob ",
-        30
-    )
+    def delete_player(self, name):
+        self.deleted_name = name
 
-    assert result is True
-    assert service.players == {
-        "Alice": 70,
-        "Bob": 50
-    }
+        return {
+            "player_id": 1,
+            "name": name,
+            "score": 120,
+            "created_at": None
+        }
 
-
-def test_transfer_score_failures():
-    service = PlayerService({
-        "Alice": 100,
-        "Bob": 20
-    })
-
-    invalid_cases = [
-        ("Cindy", "Bob", 10),  # 发送者不存在
-        ("Alice", "Cindy", 10),  # 接收者不存在
-        ("Alice", "Alice", 10),  # 给自己转账
-        ("Alice", "Bob", 0),  # 数量为0
-        ("Alice", "Bob", -10),  # 数量为负
-        ("Alice", "Bob", 101),  # 余额不足
-        ("   ", "Bob", 10),  # 发送者为空
-        ("Alice", "   ", 10),  # 接收者为空
-    ]
-
-    for sender, receiver, points in invalid_cases:
-        before = service.players.copy()
-
-        result = service.transfer_score(
+    def transfer_score(
+            self,
+            sender,
+            receiver,
+            points
+    ):
+        self.transfer_request = (
             sender,
             receiver,
             points
         )
 
-        assert result is False, (
-            f"Unexpected success: "
-            f"sender={sender!r}, "
-            f"receiver={receiver!r}, "
-            f"points={points}"
+        return TransferResult.SUCCESS
+
+    def get_transfer_history(
+            self,
+            limit,
+            offset
+    ):
+        self.history_request = (
+            limit,
+            offset
         )
-        assert service.players == before
 
+        return [
+            {
+                "transfer_id": 1,
+                "sender": "Alice",
+                "receiver": "Bob",
+                "points": 30,
+                "created_at": None
+            }
+        ]
 
-def test_transfer_all_score():
-    service = PlayerService({
-        "Alice": 100,
-        "Bob": 20
-    })
+def test_get_player_uses_repository():
+    repository = FakeRepository()
+    service = PlayerService(repository)
 
-    assert service.transfer_score(
-        "Alice",
-        "Bob",
-        100
-    ) is True
+    player = service.get_player("Alice")
 
-    assert service.players == {
-        "Alice": 0,
-        "Bob": 120
+    assert repository.requested_name == "Alice"
+    assert player == {
+        "player_id": 1,
+        "name": "Alice",
+        "score": 120,
+        "created_at": None
     }
 
+def test_create_player_uses_repository():
+    repository = FakeRepository()
+    service = PlayerService(repository)
 
-def test_transfer_history():
-    service = PlayerService({
-        "Alice": 100,
-        "Bob": 20
-    })
+    player = service.create_player("Diana")
 
-    assert service.transfer_history == []
+    assert repository.created_name == "Diana"
+    assert player["name"] == "Diana"
+    assert player["score"] == 0
 
-    assert service.transfer_score(
-        " Alice ",
-        " Bob ",
+
+def test_get_ranking_uses_repository():
+    repository = FakeRepository()
+    service = PlayerService(repository)
+
+    ranking = service.get_ranking()
+
+    assert repository.ranking_requested is True
+    assert ranking[0]["name"] == "Alice"
+
+
+def test_add_score_uses_repository():
+    repository = FakeRepository()
+    service = PlayerService(repository)
+
+    player = service.add_score("Alice", 30)
+
+    assert repository.score_request == (
+        "Alice",
         30
-    ) is True
+    )
+    assert player["score"] == 150
 
-    assert service.transfer_history == [
-        {
-            "sender": "Alice",
-            "receiver": "Bob",
-            "points": 30
-        }
-    ]
 
-    assert service.transfer_score(
+def test_delete_player_uses_repository():
+    repository = FakeRepository()
+    service = PlayerService(repository)
+
+    player = service.delete_player("Alice")
+
+    assert repository.deleted_name == "Alice"
+    assert player["name"] == "Alice"
+
+
+def test_transfer_score_uses_repository():
+    repository = FakeRepository()
+    service = PlayerService(repository)
+
+    result = service.transfer_score(
         "Alice",
         "Bob",
-        100
-    ) is False
+        30
+    )
 
-    assert len(service.transfer_history) == 1
+    assert repository.transfer_request == (
+        "Alice",
+        "Bob",
+        30
+    )
+    assert result is TransferResult.SUCCESS
+
+
+def test_get_transfer_history_uses_repository():
+    repository = FakeRepository()
+    service = PlayerService(repository)
+
+    history = service.get_transfer_history(
+        limit=10,
+        offset=20
+    )
+
+    assert repository.history_request == (
+        10,
+        20
+    )
+    assert history[0]["transfer_id"] == 1

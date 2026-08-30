@@ -5,21 +5,22 @@
 プレイヤーの作成・検索・削除、スコア管理、ランキング、プレイヤー間のスコア移動、移動履歴などを実装しています。
 
 > [!IMPORTANT]
-> 現在、FastAPIはPostgreSQL Repositoryと接続されており、プレイヤーの作成・検索・削除・スコア追加・スコア移動・移動履歴取得・ランキング取得をPostgreSQL上で実行できます。
-> インメモリ版の`PlayerService`は、基礎的な業務ロジックとJSON保存を確認する独立した学習実装として残しています。
+> 現在、FastAPI、PlayerService、PostgreSQL Repositoryが接続されており、プレイヤーの作成・検索・削除・スコア追加・スコア移動・移動履歴取得・ランキング取得をPostgreSQL上で実行できます。
+> 旧インメモリ版のServiceは、基礎的な業務ロジックとJSON保存を確認する`legacy_player_service.py`として残しています。
 
 ## 現在の構成
 
-| レイヤー                  | 主な機能                                            | データ保存先    |
-|------------------------|-------------------------------------------------|------------|
-| FastAPI API            | プレイヤー作成・検索・削除、スコア追加・移動、移動履歴、ランキング              | PostgreSQL |
-| PlayerService          | スコア追加、スコア移動、履歴、JSON保存・読込                        | メモリ／JSON   |
-| PostgreSQL Repository  | プレイヤー検索・作成・削除、スコア追加、ランキング、トランザクション付きスコア移動、移動履歴取得 | PostgreSQL |
+| レイヤー                  | 主な機能                                      | データ保存先       |
+|------------------------|-------------------------------------------|--------------|
+| FastAPI API            | HTTPリクエスト・レスポンス、ステータスコード変換              | PlayerService経由 |
+| PlayerService          | APIユースケースの調整、Repository呼び出し               | Repository経由    |
+| PostgreSQL Repository  | SQL、トランザクション、PostgreSQLデータアクセス             | PostgreSQL       |
+| Legacy PlayerService   | 基礎的な業務ロジック、JSON保存・読込                     | メモリ／JSON       |
 
 現在の正式なAPI経路は次のとおりです。
 
 ```text
-HTTP → FastAPI → PostgreSQL Repository → Psycopg → PostgreSQL
+HTTP → FastAPI → PlayerService → PostgreSQL Repository → Psycopg → PostgreSQL
 ```
 
 ## 主な実装内容
@@ -192,7 +193,7 @@ python -m pytest -m "not integration" -q
 実行結果：
 
 ```text
-51 passed
+58 passed
 ```
 
 PostgreSQL Repository・API統合テスト：
@@ -216,7 +217,7 @@ python -m pytest -q
 現在の実行結果：
 
 ```text
-105 passed
+112 passed
 ```
 
 統合テストには、意図的にPostgreSQLの整数上限超過を発生させるテストが含まれています。スコアの加算処理が途中で失敗した場合でも、送信者の減算、受信者の加算、移動履歴の追加がすべてロールバックされることを確認しています。
@@ -228,6 +229,7 @@ python -m pytest -q
 ├── main.py
 ├── schemas.py
 ├── player_service.py
+├── legacy_player_service.py
 ├── player_repository.py
 ├── database.py
 ├── database/
@@ -235,6 +237,7 @@ python -m pytest -q
 ├── test_main.py
 ├── test_main_integration.py
 ├── test_player_service.py
+├── test_legacy_player_service.py
 ├── test_player_repository.py
 ├── conftest.py
 ├── pytest.ini
@@ -244,6 +247,10 @@ python -m pytest -q
 ```
 
 ## 設計上のポイント
+
+### Service層と依存関係の差し替え
+
+FastAPIのendpointはRepositoryを直接呼び出さず、PlayerServiceを経由します。API単体テストではFakeService、Service単体テストではFakeRepositoryを使用し、PostgreSQL統合テストでは実際のRepositoryとテストデータベースを使用します。
 
 ### トランザクションの原子性
 
@@ -308,20 +315,21 @@ Game Player Service 是一个以游戏玩家管理为场景的 Python 后端作�
 项目已实现玩家创建、查询、删除、积分增加、排行榜、玩家间积分转移、转移历史及 JSON 持久化等功能。
 
 > [!IMPORTANT]
-> 当前 FastAPI 已正式连接 PostgreSQL Repository，可以使用 PostgreSQL 完成玩家创建、查询、删除、积分增加、积分转移、转移历史查询和排行榜获取。
-> 内存版 `PlayerService` 作为基础业务逻辑和 JSON 保存功能的独立学习实现保留。
+> 当前 FastAPI、PlayerService 和 PostgreSQL Repository 已正式连接，可以使用 PostgreSQL 完成玩家创建、查询、删除、积分增加、积分转移、转移历史查询和排行榜获取。
+> 原内存版 Service 作为 `legacy_player_service.py` 保留，用于展示基础业务逻辑和 JSON 保存功能。
 
 ### 当前架构
 
-| 层级                    | 已实现功能                       | 数据存储       |
-| --------------------- |-----------------------------| ---------- |
-| FastAPI API           | 玩家创建、查询、删除、积分增加、积分转移、转移历史、排行榜 | PostgreSQL |
-| PlayerService         | 积分增加、积分转移、历史记录、JSON 保存与读取   | 内存／JSON    |
-| PostgreSQL Repository | 玩家查询、创建、删除、积分增加、排行榜、事务化积分转移、转移历史查询 | PostgreSQL |
+| 层级                    | 主要职责                         | 数据存储       |
+|-----------------------|------------------------------|------------|
+| FastAPI API           | HTTP 请求与响应、状态码转换             | 通过 PlayerService |
+| PlayerService         | 组织 API 用例、调用 Repository        | 通过 Repository    |
+| PostgreSQL Repository | SQL、事务及 PostgreSQL 数据访问       | PostgreSQL |
+| Legacy PlayerService  | 基础业务逻辑、JSON 保存与读取            | 内存／JSON    |
 
 当前正式 API 的调用路径为：
 
-`HTTP → FastAPI → PostgreSQL Repository → Psycopg → PostgreSQL`
+HTTP → FastAPI → PlayerService → PostgreSQL Repository → Psycopg → PostgreSQL
 
 ### 核心功能
 
@@ -459,7 +467,7 @@ python -m pytest -m "not integration" -q
 当前结果：
 
 ```text
-51 passed
+58 passed
 ```
 
 PostgreSQL Repository 与 API 集成测试：
@@ -483,7 +491,7 @@ python -m pytest -q
 当前结果：
 
 ```text
-105 passed
+112 passed
 ```
 
 ### 事务设计
@@ -507,6 +515,10 @@ python -m pytest -q
 ### 明确的业务结果
 
 积分转移不再只返回`True`／`False`，而是使用`TransferResult` Enum 区分成功、玩家不存在、积分不足和非法请求。FastAPI 再将这些业务结果分别转换为`201`、`404`、`409`和`422`状态码。
+
+### Service 层与依赖替换
+
+FastAPI endpoint 不再直接调用 Repository，而是通过 PlayerService 执行业务流程。API 单元测试使用 FakeService，Service 单元测试使用 FakeRepository，PostgreSQL 集成测试则使用真实 Repository 和测试数据库。
 
 ### API 输入与输出契约
 

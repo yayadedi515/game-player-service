@@ -17,6 +17,7 @@ from schemas import (
     TransferResponse,
 )
 from transfer_result import TransferResult
+from player_service import PlayerService
 
 
 app = FastAPI(title="Game Player Service")
@@ -24,6 +25,12 @@ app = FastAPI(title="Game Player Service")
 
 def get_player_repository():
     return player_repository
+
+
+def get_player_service(
+        repository=Depends(get_player_repository)
+):
+    return PlayerService(repository)
 
 
 @app.get(
@@ -40,9 +47,9 @@ def health_check():
 )
 def get_player(
     name: PlayerName,
-    repository=Depends(get_player_repository)
+    service=Depends(get_player_service)
 ):
-    player = repository.find_player_by_name(name)
+    player = service.get_player(name)
 
     if player is None:
         raise HTTPException(
@@ -61,9 +68,9 @@ def get_player(
     response_model=RankingResponse
 )
 def get_ranking(
-    repository=Depends(get_player_repository)
+    service=Depends(get_player_service)
 ):
-    players = repository.get_ranking()
+    players = service.get_ranking()
 
     ranking = [
         {
@@ -85,9 +92,11 @@ def get_ranking(
 )
 def create_player(
     player: PlayerCreate,
-    repository=Depends(get_player_repository)
+    service=Depends(get_player_service)
 ):
-    created_player = repository.create_player(player.name)
+    created_player = service.create_player(
+        player.name
+    )
 
     if created_player is None:
         raise HTTPException(
@@ -108,10 +117,10 @@ def create_player(
 )
 def delete_player(
     name: PlayerName,
-    repository=Depends(get_player_repository)
+    service=Depends(get_player_service)
 ):
     try:
-        deleted_player = repository.delete_player(name)
+        deleted_player = service.delete_player(name)
     except RestrictViolation as error:
         raise HTTPException(
             status_code=409,
@@ -138,9 +147,9 @@ def delete_player(
 def add_player_score(
         name: PlayerName,
         score_add: ScoreAdd,
-        repository=Depends(get_player_repository)
+        service=Depends(get_player_service)
 ):
-    player = repository.add_score(
+    player = service.add_score(
         name,
         score_add.points
     )
@@ -164,9 +173,9 @@ def add_player_score(
 )
 def transfer_player_score(
         transfer: ScoreTransfer,
-        repository=Depends(get_player_repository)
+        service=Depends(get_player_service)
 ):
-    result = repository.transfer_score(
+    result = service.transfer_score(
         transfer.sender,
         transfer.receiver,
         transfer.points
@@ -216,10 +225,10 @@ def get_transfer_history(
             int,
             Query(ge=0)
         ] = 0,
-        repository=Depends(get_player_repository)
+        service=Depends(get_player_service)
 ):
     return {
-        "transfers": repository.get_transfer_history(
+        "transfers": service.get_transfer_history(
             limit=limit,
             offset=offset
         )

@@ -9,7 +9,7 @@ from transfer_result import TransferResult
 client = TestClient(app)
 
 
-class FakeRepository:
+class FakeService:
     def __init__(self):
         self.transfer_score_call_count = 0
         self.get_transfer_history_call_count = 0
@@ -56,7 +56,7 @@ class FakeRepository:
 
         return self.players.pop(cleaned_name, None)
 
-    def find_player_by_name(self, name):
+    def get_player(self, name):
         return self.players.get(name.strip())
 
     def create_player(self, name):
@@ -142,19 +142,20 @@ class FakeRepository:
         ]
 
 @pytest.fixture(autouse=True)
-def fake_repository():
-    repository = FakeRepository()
+def fake_service():
+    service = FakeService()
 
-    def provide_fake_repository():
-        return repository
+    def provide_fake_service():
+        return service
 
     app.dependency_overrides[
-        main.get_player_repository
-    ] = provide_fake_repository
+        main.get_player_service
+    ] = provide_fake_service
 
-    yield repository
-
-    app.dependency_overrides.clear()
+    try:
+        yield service
+    finally:
+        app.dependency_overrides.clear()
 
 
 def test_health_check():
@@ -178,8 +179,8 @@ def test_get_players_missing_players():
     assert response.json() == {"detail": "Player not found"}
 
 
-def test_get_ranking(fake_repository):
-    fake_repository.players["Charlie"] = {
+def test_get_ranking(fake_service):
+    fake_service.players["Charlie"] = {
         "player_id": 3,
         "name": "Charlie",
         "score": 150,
@@ -268,8 +269,10 @@ def test_delete_player_not_found():
     assert response.json() == {"detail": "Player not found"}
 
 
-def test_get_player_uses_repository_dependency(fake_repository):
-    fake_repository.players["Diana"] = {
+def test_get_player_uses_service_dependency(
+        fake_service
+):
+    fake_service.players["Diana"] = {
         "player_id": 7,
         "name": "Diana",
         "score": 345,
@@ -286,9 +289,9 @@ def test_get_player_uses_repository_dependency(fake_repository):
 
 
 def test_delete_player_with_transfer_history_returns_conflict(
-    fake_repository
+    fake_service
 ):
-    fake_repository.restricted_names.add("Alice")
+    fake_service.restricted_names.add("Alice")
 
     response = client.delete("/players/Alice")
 
@@ -297,11 +300,11 @@ def test_delete_player_with_transfer_history_returns_conflict(
         "detail": "Player has transfer history"
     }
 
-    player = fake_repository.find_player_by_name("Alice")
+    player = fake_service.get_player("Alice")
     assert player is not None
 
 
-def test_add_score_success(fake_repository):
+def test_add_score_success(fake_service):
     response = client.patch(
         "/players/Alice/score",
         json={"points": 30}
@@ -313,7 +316,7 @@ def test_add_score_success(fake_repository):
         "score": 150
     }
 
-    assert fake_repository.players["Alice"]["score"] == 150
+    assert fake_service.players["Alice"]["score"] == 150
 
 
 def test_add_score_player_not_found():
@@ -328,17 +331,17 @@ def test_add_score_player_not_found():
     }
 
 
-def test_add_score_negative_points_returns_422(fake_repository):
+def test_add_score_negative_points_returns_422(fake_service):
     response = client.patch(
         "/players/Alice/score",
         json={"points": -1}
     )
 
     assert response.status_code == 422
-    assert fake_repository.players["Alice"]["score"] == 120
+    assert fake_service.players["Alice"]["score"] == 120
 
 
-def test_add_score_zero_points_is_allowed(fake_repository):
+def test_add_score_zero_points_is_allowed(fake_service):
     response = client.patch(
         "/players/Alice/score",
         json={"points": 0}
@@ -349,10 +352,10 @@ def test_add_score_zero_points_is_allowed(fake_repository):
         "name": "Alice",
         "score": 120
     }
-    assert fake_repository.players["Alice"]["score"] == 120
+    assert fake_service.players["Alice"]["score"] == 120
 
 
-def test_transfer_score_success(fake_repository):
+def test_transfer_score_success(fake_service):
     response = client.post(
         "/transfers",
         json={
@@ -369,12 +372,12 @@ def test_transfer_score_success(fake_repository):
         "points": 30
     }
 
-    assert fake_repository.players["Alice"]["score"] == 90
-    assert fake_repository.players["Bob"]["score"] == 120
+    assert fake_service.players["Alice"]["score"] == 90
+    assert fake_service.players["Bob"]["score"] == 120
 
 
 def test_transfer_score_insufficient_score_returns_conflict(
-        fake_repository
+        fake_service
 ):
     response = client.post(
         "/transfers",
@@ -390,11 +393,11 @@ def test_transfer_score_insufficient_score_returns_conflict(
         "detail": "Insufficient score"
     }
 
-    assert fake_repository.players["Alice"]["score"] == 120
-    assert fake_repository.players["Bob"]["score"] == 90
+    assert fake_service.players["Alice"]["score"] == 120
+    assert fake_service.players["Bob"]["score"] == 90
 
 
-def test_transfer_score_missing_player_returns_not_found(fake_repository):
+def test_transfer_score_missing_player_returns_not_found(fake_service):
     response = client.post(
         "/transfers",
         json={
@@ -409,11 +412,11 @@ def test_transfer_score_missing_player_returns_not_found(fake_repository):
         "detail": "Player not found"
     }
 
-    assert fake_repository.players["Alice"]["score"] == 120
-    assert fake_repository.players["Bob"]["score"] == 90
+    assert fake_service.players["Alice"]["score"] == 120
+    assert fake_service.players["Bob"]["score"] == 90
 
 
-def test_transfer_score_same_player_returns_422(fake_repository):
+def test_transfer_score_same_player_returns_422(fake_service):
     response = client.post(
         "/transfers",
         json={
@@ -432,12 +435,12 @@ def test_transfer_score_same_player_returns_422(fake_repository):
             "Sender and receiver must be different"
             in detail[0]["msg"]
     )
-    assert fake_repository.players["Alice"]["score"] == 120
+    assert fake_service.players["Alice"]["score"] == 120
 
 
 @pytest.mark.parametrize("points", [0, -1])
 def test_transfer_score_non_positive_points_returns_422(
-        fake_repository,
+        fake_service,
         points
 ):
     response = client.post(
@@ -450,11 +453,11 @@ def test_transfer_score_non_positive_points_returns_422(
     )
 
     assert response.status_code == 422
-    assert fake_repository.players["Alice"]["score"] == 120
-    assert fake_repository.players["Bob"]["score"] == 90
+    assert fake_service.players["Alice"]["score"] == 120
+    assert fake_service.players["Bob"]["score"] == 90
 
 
-def test_get_transfer_history_returns_transfers(fake_repository):
+def test_get_transfer_history_returns_transfers(fake_service):
     transfer_response = client.post(
         "/transfers",
         json={
@@ -506,7 +509,7 @@ def test_create_player_name_with_50_characters_is_allowed():
 
 
 def test_create_player_name_longer_than_50_returns_422(
-        fake_repository
+        fake_service
 ):
     name = "A" * 51
 
@@ -516,7 +519,7 @@ def test_create_player_name_longer_than_50_returns_422(
     )
 
     assert response.status_code == 422
-    assert name not in fake_repository.players
+    assert name not in fake_service.players
 
 
 def test_get_player_blank_name_returns_422():
@@ -560,7 +563,7 @@ def test_player_path_blank_name_returns_422(
 def test_transfer_player_name_longer_than_50_returns_422(
         sender,
         receiver,
-        fake_repository
+        fake_service
 ):
     response = client.post(
         "/transfers",
@@ -572,11 +575,11 @@ def test_transfer_player_name_longer_than_50_returns_422(
     )
 
     assert response.status_code == 422
-    assert fake_repository.transfer_history == []
+    assert fake_service.transfer_history == []
 
 
 def test_transfer_same_player_is_rejected_before_repository(
-        fake_repository
+        fake_service
 ):
     response = client.post(
         "/transfers",
@@ -588,7 +591,7 @@ def test_transfer_same_player_is_rejected_before_repository(
     )
 
     assert response.status_code == 422
-    assert fake_repository.transfer_score_call_count == 0
+    assert fake_service.transfer_score_call_count == 0
 
 
 def test_get_player_openapi_uses_player_response():
@@ -760,7 +763,7 @@ def test_get_transfer_history_supports_pagination():
 )
 def test_get_transfer_history_rejects_invalid_pagination(
         query,
-        fake_repository
+        fake_service
 ):
     response = client.get(
         f"/transfers?{query}"
@@ -768,7 +771,7 @@ def test_get_transfer_history_rejects_invalid_pagination(
 
     assert response.status_code == 422
     assert (
-        fake_repository
+        fake_service
         .get_transfer_history_call_count
         == 0
     )
