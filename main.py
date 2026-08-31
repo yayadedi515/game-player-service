@@ -1,7 +1,7 @@
 from typing import Annotated
 
 from fastapi import Depends, FastAPI, HTTPException, Query
-from psycopg.errors import RestrictViolation
+
 
 import player_repository
 from schemas import (
@@ -16,8 +16,15 @@ from schemas import (
     TransferHistoryResponse,
     TransferResponse,
 )
-from transfer_result import TransferResult
 from player_service import PlayerService
+from player_exceptions import (
+    InsufficientScoreError,
+    InvalidTransferError,
+    UnexpectedTransferResultError,
+    PlayerDeletionRestrictedError,
+    DuplicatePlayerError,
+    PlayerNotFoundError,
+)
 
 
 app = FastAPI(title="Game Player Service")
@@ -49,13 +56,13 @@ def get_player(
     name: PlayerName,
     service=Depends(get_player_service)
 ):
-    player = service.get_player(name)
-
-    if player is None:
+    try:
+        player = service.get_player(name)
+    except PlayerNotFoundError as error:
         raise HTTPException(
             status_code=404,
             detail="Player not found"
-        )
+        ) from error
 
     return {
         "name": player["name"],
@@ -94,15 +101,13 @@ def create_player(
     player: PlayerCreate,
     service=Depends(get_player_service)
 ):
-    created_player = service.create_player(
-        player.name
-    )
-
-    if created_player is None:
+    try:
+        created_player = service.create_player(player.name)
+    except DuplicatePlayerError as error:
         raise HTTPException(
             status_code=400,
             detail="Invalid or duplicate player"
-        )
+        ) from error
 
     return {
         "name": created_player["name"],
@@ -121,17 +126,18 @@ def delete_player(
 ):
     try:
         deleted_player = service.delete_player(name)
-    except RestrictViolation as error:
+
+    except PlayerNotFoundError as error:
+        raise HTTPException(
+            status_code=404,
+            detail="Player not found"
+        ) from error
+
+    except PlayerDeletionRestrictedError as error:
         raise HTTPException(
             status_code=409,
             detail="Player has transfer history"
         ) from error
-
-    if deleted_player is None:
-        raise HTTPException(
-            status_code=404,
-            detail="Player not found"
-        )
 
     return {
         "message": (
@@ -149,16 +155,16 @@ def add_player_score(
         score_add: ScoreAdd,
         service=Depends(get_player_service)
 ):
-    player = service.add_score(
-        name,
-        score_add.points
-    )
-
-    if player is None:
+    try:
+        player = service.add_score(
+            name,
+            score_add.points
+        )
+    except PlayerNotFoundError as error:
         raise HTTPException(
             status_code=404,
             detail="Player not found"
-        )
+        ) from error
 
     return {
         "name": player["name"],
@@ -175,41 +181,38 @@ def transfer_player_score(
         transfer: ScoreTransfer,
         service=Depends(get_player_service)
 ):
-    result = service.transfer_score(
-        transfer.sender,
-        transfer.receiver,
-        transfer.points
-    )
+    try:
+        transfer_result = service.transfer_score(
+            transfer.sender,
+            transfer.receiver,
+            transfer.points
+        )
 
-    if result is TransferResult.PLAYER_NOT_FOUND:
+    except PlayerNotFoundError as error:
         raise HTTPException(
             status_code=404,
             detail="Player not found"
-        )
+        ) from error
 
-    if result is TransferResult.INSUFFICIENT_SCORE:
+    except InsufficientScoreError as error:
         raise HTTPException(
             status_code=409,
             detail="Insufficient score"
-        )
+        ) from error
 
-    if result is TransferResult.INVALID_REQUEST:
+    except InvalidTransferError as error:
         raise HTTPException(
             status_code=422,
             detail="Invalid transfer"
-        )
+        ) from error
 
-    if result is not TransferResult.SUCCESS:
+    except UnexpectedTransferResultError as error:
         raise HTTPException(
             status_code=500,
             detail="Unexpected transfer result"
-        )
+        ) from error
 
-    return {
-        "sender": transfer.sender.strip(),
-        "receiver": transfer.receiver.strip(),
-        "points": transfer.points
-    }
+    return transfer_result
 
 
 @app.get(

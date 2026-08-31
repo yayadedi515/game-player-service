@@ -30,13 +30,13 @@
 
 以前は機能を変更するたびに、APIや各処理を手動で一つずつ確認していました。自動テストを追加したことで、変更による影響をまとめて確認できるようになり、確認漏れを減らすことができました。
 
-現在は、コンポーネントテスト、依存関係を差し替えたAPI単体テスト、PostgreSQLを使用するRepository・API統合テストを合わせた112件のテストを、自分の開発環境では約8秒で実行できます。
+現在は、コンポーネントテスト、依存関係を差し替えたAPI単体テスト、PostgreSQLを使用するRepository・API統合テストを合わせた122件のテストを、自分の開発環境では約8秒で実行できます。
 
 また、テストが失敗した場所から原因を調べられるため、手動確認だけの場合よりも修正箇所を見つけやすくなりました。
 
 ## 現在の到達点と今後
 
-現在、FastAPIとPostgreSQL Repositoryの間にPlayerService層を導入し、API、業務処理、データアクセスの責務を分離しています。また、API単体テストではFakeService、Service単体テストではFakeRepository、統合テストでは実際のテストデータベースを使用しています。
+現在、FastAPIとPostgreSQL Repositoryの間にPlayerService層を導入し、API、業務処理、データアクセスの責務を分離しています。PlayerServiceはRepositoryの返却値やデータベース制約例外を、成功データまたは業務例外に変換します。また、API単体テストではFakeService、Service単体テストではFakeRepository、統合テストでは実際のテストデータベースを使用しています。
 
 今後はPydanticによる入力検証をさらに強化し、Dockerによる実行環境とCIによる自動テストを追加する予定です。
 

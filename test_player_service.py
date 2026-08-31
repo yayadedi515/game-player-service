@@ -1,5 +1,16 @@
+from psycopg.errors import RestrictViolation
+
+import pytest
 from transfer_result import TransferResult
 from player_service import PlayerService
+from player_exceptions import (
+    InsufficientScoreError,
+    InvalidTransferError,
+    DuplicatePlayerError,
+    PlayerDeletionRestrictedError,
+    PlayerNotFoundError,
+    UnexpectedTransferResultError
+)
 
 
 class FakeRepository:
@@ -11,19 +22,27 @@ class FakeRepository:
         self.deleted_name = None
         self.transfer_request = None
         self.history_request = None
-
-    def find_player_by_name(self, name):
-        self.requested_name = name
-
-        return {
+        self.create_player_succeeds = True
+        self.add_score_succeeds = True
+        self.delete_player_succeeds = True
+        self.delete_player_restricted = False
+        self.transfer_result = TransferResult.SUCCESS
+        self.find_player_result = {
             "player_id": 1,
             "name": "Alice",
             "score": 120,
             "created_at": None
         }
 
+    def find_player_by_name(self, name):
+        self.requested_name = name
+        return self.find_player_result
+
     def create_player(self, name):
         self.created_name = name
+
+        if not self.create_player_succeeds:
+            return None
 
         return {
             "player_id": 2,
@@ -47,6 +66,9 @@ class FakeRepository:
     def add_score(self, name, points):
         self.score_request = (name, points)
 
+        if not self.add_score_succeeds:
+            return None
+
         return {
             "player_id": 1,
             "name": name,
@@ -55,7 +77,15 @@ class FakeRepository:
         }
 
     def delete_player(self, name):
+        if self.delete_player_restricted:
+            raise RestrictViolation(
+                "Player is referenced by transfer history"
+            )
+
         self.deleted_name = name
+
+        if not self.delete_player_succeeds:
+            return None
 
         return {
             "player_id": 1,
@@ -76,7 +106,7 @@ class FakeRepository:
             points
         )
 
-        return TransferResult.SUCCESS
+        return self.transfer_result
 
     def get_transfer_history(
             self,
@@ -171,7 +201,11 @@ def test_transfer_score_uses_repository():
         "Bob",
         30
     )
-    assert result is TransferResult.SUCCESS
+    assert result == {
+        "sender": "Alice",
+        "receiver": "Bob",
+        "points": 30
+    }
 
 
 def test_get_transfer_history_uses_repository():
@@ -188,3 +222,94 @@ def test_get_transfer_history_uses_repository():
         20
     )
     assert history[0]["transfer_id"] == 1
+
+
+def test_get_missing_player_raises_player_not_found():
+    repository = FakeRepository()
+    repository.find_player_result = None
+    service = PlayerService(repository)
+
+    with pytest.raises(PlayerNotFoundError):
+        service.get_player("Cindy")
+
+
+def test_create_duplicate_player_raises_duplicate_player():
+    repository = FakeRepository()
+    repository.create_player_succeeds = False
+    service = PlayerService(repository)
+
+    with pytest.raises(DuplicatePlayerError):
+        service.create_player("Alice")
+
+
+def test_add_score_missing_player_raises_player_not_found():
+    repository = FakeRepository()
+    repository.add_score_succeeds = False
+    service = PlayerService(repository)
+
+    with pytest.raises(PlayerNotFoundError):
+        service.add_score("Cindy", 30)
+
+
+def test_delete_missing_player_raises_player_not_found():
+    repository = FakeRepository()
+    repository.delete_player_succeeds = False
+    service = PlayerService(repository)
+
+    with pytest.raises(PlayerNotFoundError):
+        service.delete_player("Cindy")
+
+
+def test_delete_restricted_player_raises_business_error():
+    repository = FakeRepository()
+    repository.delete_player_restricted = True
+    service = PlayerService(repository)
+
+    with pytest.raises(PlayerDeletionRestrictedError):
+        service.delete_player("Alice")
+
+
+@pytest.mark.parametrize(
+    ("repository_result", "expected_error"),
+    [
+        (
+            TransferResult.PLAYER_NOT_FOUND,
+            PlayerNotFoundError
+        ),
+        (
+            TransferResult.INSUFFICIENT_SCORE,
+            InsufficientScoreError
+        ),
+        (
+            TransferResult.INVALID_REQUEST,
+            InvalidTransferError
+        ),
+    ]
+)
+def test_transfer_score_converts_results_to_business_errors(
+        repository_result,
+        expected_error
+):
+    repository = FakeRepository()
+    repository.transfer_result = repository_result
+    service = PlayerService(repository)
+
+    with pytest.raises(expected_error):
+        service.transfer_score(
+            "Alice",
+            "Bob",
+            30
+        )
+
+
+def test_transfer_score_unexpected_result_raises_error():
+    repository = FakeRepository()
+    repository.transfer_result = object()
+    service = PlayerService(repository)
+
+    with pytest.raises(UnexpectedTransferResultError):
+        service.transfer_score(
+            "Alice",
+            "Bob",
+            30
+        )

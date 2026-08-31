@@ -13,7 +13,7 @@
 | レイヤー                  | 主な機能                                      | データ保存先       |
 |------------------------|-------------------------------------------|--------------|
 | FastAPI API            | HTTPリクエスト・レスポンス、ステータスコード変換              | PlayerService経由 |
-| PlayerService          | APIユースケースの調整、Repository呼び出し               | Repository経由    |
+| PlayerService          | APIユースケースの調整、Repository結果を業務結果・業務例外へ変換 | Repository経由    |
 | PostgreSQL Repository  | SQL、トランザクション、PostgreSQLデータアクセス             | PostgreSQL       |
 | Legacy PlayerService   | 基礎的な業務ロジック、JSON保存・読込                     | メモリ／JSON       |
 
@@ -193,7 +193,7 @@ python -m pytest -m "not integration" -q
 実行結果：
 
 ```text
-58 passed
+68 passed
 ```
 
 PostgreSQL Repository・API統合テスト：
@@ -217,7 +217,7 @@ python -m pytest -q
 現在の実行結果：
 
 ```text
-112 passed
+122 passed
 ```
 
 統合テストには、意図的にPostgreSQLの整数上限超過を発生させるテストが含まれています。スコアの加算処理が途中で失敗した場合でも、送信者の減算、受信者の加算、移動履歴の追加がすべてロールバックされることを確認しています。
@@ -268,7 +268,7 @@ FastAPIのendpointはRepositoryを直接呼び出さず、PlayerServiceを経由
 
 ### 明確な業務結果
 
-スコア移動処理では、単純な`True`／`False`ではなく、`TransferResult` Enumを使用しています。成功、プレイヤーが存在しない場合、スコア不足、不正なリクエストを区別し、FastAPIで`201`、`404`、`409`、`422`のHTTPステータスに変換します。
+スコア移動では、Repositoryは`TransferResult` Enumを返します。PlayerServiceはこれを成功データ、または`PlayerNotFoundError`、`InsufficientScoreError`、`InvalidTransferError`、`UnexpectedTransferResultError`などの業務例外に変換します。FastAPIは成功時に`201`を返し、各業務例外を`404`、`409`、`422`、`500`のHTTPレスポンスに変換します。
 
 ### テスト設計
 
@@ -323,7 +323,7 @@ Game Player Service 是一个以游戏玩家管理为场景的 Python 后端作�
 | 层级                    | 主要职责                         | 数据存储       |
 |-----------------------|------------------------------|------------|
 | FastAPI API           | HTTP 请求与响应、状态码转换             | 通过 PlayerService |
-| PlayerService         | 组织 API 用例、调用 Repository        | 通过 Repository    |
+| PlayerService         | 组织 API 用例、将 Repository 结果转换为业务结果或业务异常 | 通过 Repository    |
 | PostgreSQL Repository | SQL、事务及 PostgreSQL 数据访问       | PostgreSQL |
 | Legacy PlayerService  | 基础业务逻辑、JSON 保存与读取            | 内存／JSON    |
 
@@ -467,7 +467,7 @@ python -m pytest -m "not integration" -q
 当前结果：
 
 ```text
-58 passed
+68 passed
 ```
 
 PostgreSQL Repository 与 API 集成测试：
@@ -491,7 +491,7 @@ python -m pytest -q
 当前结果：
 
 ```text
-112 passed
+122 passed
 ```
 
 ### 事务设计
@@ -514,7 +514,7 @@ python -m pytest -q
 
 ### 明确的业务结果
 
-积分转移不再只返回`True`／`False`，而是使用`TransferResult` Enum 区分成功、玩家不存在、积分不足和非法请求。FastAPI 再将这些业务结果分别转换为`201`、`404`、`409`和`422`状态码。
+积分转移时，Repository 返回`TransferResult` Enum。PlayerService 将其转换为成功数据，或`PlayerNotFoundError`、`InsufficientScoreError`、`InvalidTransferError`、`UnexpectedTransferResultError`等业务异常。FastAPI 在成功时返回`201`，并将各业务异常转换为`404`、`409`、`422`、`500`等 HTTP 响应。
 
 ### Service 层与依赖替换
 

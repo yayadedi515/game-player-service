@@ -1,10 +1,16 @@
 import pytest
 from fastapi.testclient import TestClient
-from psycopg.errors import RestrictViolation
 
 import main
 from main import app
-from transfer_result import TransferResult
+from player_exceptions import (
+    InsufficientScoreError,
+    InvalidTransferError,
+    PlayerDeletionRestrictedError,
+    DuplicatePlayerError,
+    PlayerNotFoundError,
+    UnexpectedTransferResultError,
+)
 
 client = TestClient(app)
 
@@ -30,6 +36,7 @@ class FakeService:
 
         self.restricted_names = set()
         self.transfer_history = []
+        self.unexpected_transfer_result = False
 
     def get_ranking(self):
         return sorted(
@@ -47,23 +54,32 @@ class FakeService:
         cleaned_name = name.strip()
 
         if cleaned_name == "":
-            return None
+            raise PlayerNotFoundError
 
         if cleaned_name in self.restricted_names:
-            raise RestrictViolation(
-                "Player is referenced by transfer history"
-            )
+            raise PlayerDeletionRestrictedError
 
-        return self.players.pop(cleaned_name, None)
+        player = self.players.pop(cleaned_name, None)
+
+        if player is None:
+            raise PlayerNotFoundError
+
+        return player
 
     def get_player(self, name):
-        return self.players.get(name.strip())
+        cleaned_name = name.strip()
+        player = self.players.get(cleaned_name)
+
+        if player is None:
+            raise PlayerNotFoundError
+
+        return player
 
     def create_player(self, name):
         cleaned_name = name.strip()
 
         if cleaned_name == "" or cleaned_name in self.players:
-            return None
+            raise DuplicatePlayerError
 
         next_player_id = max(
             player["player_id"]
@@ -85,13 +101,16 @@ class FakeService:
         player = self.players.get(cleaned_name)
 
         if player is None or points < 0:
-            return None
+            raise PlayerNotFoundError
 
         player["score"] += points
         return player
 
     def transfer_score(self, sender, receiver, points):
         self.transfer_score_call_count += 1
+        if self.unexpected_transfer_result:
+            raise UnexpectedTransferResultError
+
         cleaned_sender = sender.strip()
         cleaned_receiver = receiver.strip()
 
@@ -101,16 +120,16 @@ class FakeService:
                 or cleaned_sender == cleaned_receiver
                 or points <= 0
         ):
-            return TransferResult.INVALID_REQUEST
+            raise InvalidTransferError
 
         sender_player = self.players.get(cleaned_sender)
         receiver_player = self.players.get(cleaned_receiver)
 
         if sender_player is None or receiver_player is None:
-            return TransferResult.PLAYER_NOT_FOUND
+            raise PlayerNotFoundError
 
         if sender_player["score"] < points:
-            return TransferResult.INSUFFICIENT_SCORE
+            raise InsufficientScoreError
 
         sender_player["score"] -= points
         receiver_player["score"] += points
@@ -124,7 +143,11 @@ class FakeService:
             "created_at": None
         })
 
-        return TransferResult.SUCCESS
+        return {
+            "sender": cleaned_sender,
+            "receiver": cleaned_receiver,
+            "points": points
+        }
 
     def get_transfer_history(
             self,
@@ -775,3 +798,21 @@ def test_get_transfer_history_rejects_invalid_pagination(
         .get_transfer_history_call_count
         == 0
     )
+
+
+def test_transfer_score_unexpected_error_returns_500(fake_service):
+    fake_service.unexpected_transfer_result = True
+
+    response = client.post(
+        "/transfers",
+        json={
+            "sender": "Alice",
+            "receiver": "Bob",
+            "points": 30
+        }
+    )
+
+    assert response.status_code == 500
+    assert response.json() == {
+        "detail": "Unexpected transfer result"
+    }
