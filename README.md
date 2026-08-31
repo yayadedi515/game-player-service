@@ -13,8 +13,8 @@
 | レイヤー                  | 主な機能                                      | データ保存先       |
 |------------------------|-------------------------------------------|--------------|
 | FastAPI API            | HTTPリクエスト・レスポンス、ステータスコード変換              | PlayerService経由 |
-| PlayerService          | APIユースケースの調整、Repository結果を業務結果・業務例外へ変換 | Repository経由    |
-| PostgreSQL Repository  | SQL、トランザクション、PostgreSQLデータアクセス             | PostgreSQL       |
+| PlayerService          | APIユースケースの調整、Repository契約に基づく業務結果・業務例外への変換 | PlayerRepositoryProtocol経由 |
+| PostgreSQL Repository  | PlayerRepositoryクラス、SQL、トランザクション、PostgreSQLデータアクセス | PostgreSQL |
 | Legacy PlayerService   | 基礎的な業務ロジック、JSON保存・読込                     | メモリ／JSON       |
 
 現在の正式なAPI経路は次のとおりです。
@@ -193,7 +193,7 @@ python -m pytest -m "not integration" -q
 実行結果：
 
 ```text
-68 passed
+70 passed
 ```
 
 PostgreSQL Repository・API統合テスト：
@@ -217,7 +217,7 @@ python -m pytest -q
 現在の実行結果：
 
 ```text
-122 passed
+124 passed
 ```
 
 統合テストには、意図的にPostgreSQLの整数上限超過を発生させるテストが含まれています。スコアの加算処理が途中で失敗した場合でも、送信者の減算、受信者の加算、移動履歴の追加がすべてロールバックされることを確認しています。
@@ -230,6 +230,8 @@ python -m pytest -q
 ├── schemas.py
 ├── player_service.py
 ├── legacy_player_service.py
+├── player_exceptions.py
+├── player_repository_protocol.py
 ├── player_repository.py
 ├── database.py
 ├── database/
@@ -247,6 +249,10 @@ python -m pytest -q
 ```
 
 ## 設計上のポイント
+
+### Repository契約と実装
+
+`PlayerRepositoryProtocol`は、PlayerServiceが必要とするRepositoryメソッドを定義します。通常の実行時には`PlayerRepository`がPostgreSQLへアクセスし、Service単体テストでは`FakeRepository`が同じ契約を満たします。旧トップレベル関数はプライベートな実装補助関数とし、外部コードは`PlayerRepository`の公開メソッドを使用します。
 
 ### Service層と依存関係の差し替え
 
@@ -323,8 +329,8 @@ Game Player Service 是一个以游戏玩家管理为场景的 Python 后端作�
 | 层级                    | 主要职责                         | 数据存储       |
 |-----------------------|------------------------------|------------|
 | FastAPI API           | HTTP 请求与响应、状态码转换             | 通过 PlayerService |
-| PlayerService         | 组织 API 用例、将 Repository 结果转换为业务结果或业务异常 | 通过 Repository    |
-| PostgreSQL Repository | SQL、事务及 PostgreSQL 数据访问       | PostgreSQL |
+| PlayerService         | 组织 API 用例、基于 Repository 契约转换业务结果与业务异常 | 通过 PlayerRepositoryProtocol |
+| PostgreSQL Repository | PlayerRepository 类、SQL、事务及 PostgreSQL 数据访问 | PostgreSQL |
 | Legacy PlayerService  | 基础业务逻辑、JSON 保存与读取            | 内存／JSON    |
 
 当前正式 API 的调用路径为：
@@ -467,7 +473,7 @@ python -m pytest -m "not integration" -q
 当前结果：
 
 ```text
-68 passed
+70 passed
 ```
 
 PostgreSQL Repository 与 API 集成测试：
@@ -491,7 +497,7 @@ python -m pytest -q
 当前结果：
 
 ```text
-122 passed
+124 passed
 ```
 
 ### 事务设计
@@ -511,6 +517,10 @@ python -m pytest -q
 * 不会留下转移历史
 
 这不是仅根据代码推测事务原子性，而是通过真实数据库故障注入进行验证。
+
+### Repository 契约与实现
+
+`PlayerRepositoryProtocol` 定义了 PlayerService 所需的 Repository 方法。正常运行时由 `PlayerRepository` 访问 PostgreSQL；Service 单元测试中由 `FakeRepository` 满足同一份契约。原先的顶层函数已改为私有实现辅助函数，外部代码应使用 `PlayerRepository` 的公开方法。
 
 ### 明确的业务结果
 

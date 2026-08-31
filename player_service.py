@@ -1,6 +1,7 @@
 from psycopg.errors import RestrictViolation
 
 from transfer_result import TransferResult
+from player_repository_protocol import PlayerRepositoryProtocol
 from player_exceptions import (
     InsufficientScoreError,
     InvalidTransferError,
@@ -12,7 +13,10 @@ from player_exceptions import (
 
 
 class PlayerService:
-    def __init__(self, repository):
+    def __init__(
+            self,
+            repository: PlayerRepositoryProtocol
+    ):
         self.repository = repository
 
     def get_player(self, name):

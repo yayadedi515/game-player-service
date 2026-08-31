@@ -3,7 +3,7 @@ from typing import Annotated
 from fastapi import Depends, FastAPI, HTTPException, Query
 
 
-import player_repository
+from player_repository import PlayerRepository
 from schemas import (
     HealthResponse,
     PlayerCreate,
@@ -31,7 +31,7 @@ app = FastAPI(title="Game Player Service")
 
 
 def get_player_repository():
-    return player_repository
+    return PlayerRepository()
 
 
 def get_player_service(

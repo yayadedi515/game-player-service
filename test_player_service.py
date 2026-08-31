@@ -3,6 +3,7 @@ from psycopg.errors import RestrictViolation
 import pytest
 from transfer_result import TransferResult
 from player_service import PlayerService
+from player_repository_protocol import PlayerRepositoryProtocol
 from player_exceptions import (
     InsufficientScoreError,
     InvalidTransferError,
@@ -313,3 +314,12 @@ def test_transfer_score_unexpected_result_raises_error():
             "Bob",
             30
         )
+
+
+def test_fake_repository_satisfies_repository_protocol():
+    repository = FakeRepository()
+
+    assert isinstance(
+        repository,
+        PlayerRepositoryProtocol
+    )

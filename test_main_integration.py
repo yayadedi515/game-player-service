@@ -2,7 +2,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from main import app
-from player_repository import transfer_score
+from player_repository import PlayerRepository
 from transfer_result import TransferResult
 
 pytestmark = [
@@ -11,6 +11,7 @@ pytestmark = [
 ]
 
 client = TestClient(app)
+repository = PlayerRepository()
 
 
 def test_get_player_from_postgresql():
@@ -98,7 +99,7 @@ def test_delete_player_with_transfer_history_returns_conflict_from_postgresql():
     )
     assert create_response.status_code == 201
 
-    success = transfer_score(
+    success = repository.transfer_score(
         "Alice",
         "Bob",
         10

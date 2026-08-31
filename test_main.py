@@ -3,6 +3,8 @@ from fastapi.testclient import TestClient
 
 import main
 from main import app
+from player_repository import PlayerRepository
+from player_repository_protocol import PlayerRepositoryProtocol
 from player_exceptions import (
     InsufficientScoreError,
     InvalidTransferError,
@@ -816,3 +818,10 @@ def test_transfer_score_unexpected_error_returns_500(fake_service):
     assert response.json() == {
         "detail": "Unexpected transfer result"
     }
+
+
+def test_get_player_repository_returns_player_repository():
+    repository = main.get_player_repository()
+
+    assert isinstance(repository, PlayerRepository)
+    assert isinstance(repository, PlayerRepositoryProtocol)

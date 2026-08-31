@@ -4,7 +4,7 @@ from database import get_connection
 from transfer_result import TransferResult
 
 
-def find_player_by_name(name: str) -> dict | None:
+def _find_player_by_name(name: str) -> dict | None:
     cleaned_name = name.strip()
 
     if cleaned_name == "":
@@ -32,7 +32,7 @@ def find_player_by_name(name: str) -> dict | None:
     }
 
 
-def create_player(name: str) -> dict | None:
+def _create_player(name: str) -> dict | None:
     cleaned_name = name.strip()
 
     if cleaned_name == "":
@@ -64,7 +64,7 @@ def create_player(name: str) -> dict | None:
     }
 
 
-def add_score(name: str, score: int) -> dict | None:
+def _add_score(name: str, score: int) -> dict | None:
     cleaned_name = name.strip()
 
     if cleaned_name == "" or score < 0:
@@ -93,7 +93,7 @@ def add_score(name: str, score: int) -> dict | None:
     }
 
 
-def get_ranking() -> list[dict]:
+def _get_ranking() -> list[dict]:
     query = """
         SELECT player_id, name, score, created_at
         FROM players
@@ -116,7 +116,7 @@ def get_ranking() -> list[dict]:
         return result
 
 
-def transfer_score(
+def _transfer_score(
         sender: str,
         receiver: str,
         points: int
@@ -195,7 +195,7 @@ def transfer_score(
     return TransferResult.SUCCESS
 
 
-def get_transfer_history(
+def _get_transfer_history(
         limit: int = 20,
         offset: int = 0
 ) -> list[dict]:
@@ -247,7 +247,7 @@ def get_transfer_history(
     return result
 
 
-def delete_player(name: str) -> dict | None:
+def _delete_player(name: str) -> dict | None:
     cleaned_name = name.strip()
 
     if cleaned_name == "":
@@ -273,3 +273,37 @@ def delete_player(name: str) -> dict | None:
         "score": row[2],
         "created_at": row[3]
     }
+
+
+class PlayerRepository:
+    def find_player_by_name(self, name):
+        return _find_player_by_name(name)
+
+    def create_player(self, name):
+        return _create_player(name)
+
+    def add_score(self, name, score):
+        return _add_score(name, score)
+
+    def get_ranking(self):
+        return _get_ranking()
+
+    def transfer_score(self, sender, receiver, points):
+        return _transfer_score(
+            sender,
+            receiver,
+            points
+        )
+
+    def delete_player(self, name):
+        return _delete_player(name)
+
+    def get_transfer_history(
+            self,
+            limit=20,
+            offset=0
+    ):
+        return _get_transfer_history(
+            limit=limit,
+            offset=offset
+        )
