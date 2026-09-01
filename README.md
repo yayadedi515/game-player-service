@@ -193,7 +193,7 @@ python -m pytest -m "not integration" -q
 実行結果：
 
 ```text
-70 passed
+74 passed
 ```
 
 PostgreSQL Repository・API統合テスト：
@@ -217,7 +217,7 @@ python -m pytest -q
 現在の実行結果：
 
 ```text
-124 passed
+128 passed
 ```
 
 統合テストには、意図的にPostgreSQLの整数上限超過を発生させるテストが含まれています。スコアの加算処理が途中で失敗した場合でも、送信者の減算、受信者の加算、移動履歴の追加がすべてロールバックされることを確認しています。
@@ -227,6 +227,13 @@ python -m pytest -q
 ```text
 .
 ├── main.py
+├── app_factory.py
+├── dependencies.py
+├── routers/
+│   ├── __init__.py
+│   ├── health.py
+│   ├── players.py
+│   └── transfers.py
 ├── schemas.py
 ├── player_service.py
 ├── legacy_player_service.py
@@ -241,6 +248,9 @@ python -m pytest -q
 ├── test_player_service.py
 ├── test_legacy_player_service.py
 ├── test_player_repository.py
+├── test_app_factory.py
+├── test_dependencies.py
+├── test_health_router.py
 ├── conftest.py
 ├── pytest.ini
 ├── requirements.txt
@@ -257,6 +267,10 @@ python -m pytest -q
 ### Service層と依存関係の差し替え
 
 FastAPIのendpointはRepositoryを直接呼び出さず、PlayerServiceを経由します。API単体テストではFakeService、Service単体テストではFakeRepositoryを使用し、PostgreSQL統合テストでは実際のRepositoryとテストデータベースを使用します。
+
+### アプリケーション組み立てとルーティング
+
+`app_factory.py`の`create_app()`がFastAPIアプリケーションを生成し、`main.py`はUvicorn起動用の`app`を公開します。`routers/health.py`、`routers/players.py`、`routers/transfers.py`は関連するendpointを分担し、`dependencies.py`が通常実行時のPlayerRepositoryとPlayerServiceを生成します。各RouterにはSwagger上の表示グループも設定しています。
 
 ### トランザクションの原子性
 
@@ -473,7 +487,7 @@ python -m pytest -m "not integration" -q
 当前结果：
 
 ```text
-70 passed
+74 passed
 ```
 
 PostgreSQL Repository 与 API 集成测试：
@@ -497,7 +511,7 @@ python -m pytest -q
 当前结果：
 
 ```text
-124 passed
+128 passed
 ```
 
 ### 事务设计
@@ -529,6 +543,10 @@ python -m pytest -q
 ### Service 层与依赖替换
 
 FastAPI endpoint 不再直接调用 Repository，而是通过 PlayerService 执行业务流程。API 单元测试使用 FakeService，Service 单元测试使用 FakeRepository，PostgreSQL 集成测试则使用真实 Repository 和测试数据库。
+
+### 应用组装与路由
+
+`app_factory.py` 中的 `create_app()` 负责创建 FastAPI 应用，`main.py` 只公开供 Uvicorn 启动的 `app`。`routers/health.py`、`routers/players.py` 和 `routers/transfers.py` 分别负责相关接口，`dependencies.py` 在正常运行时创建 PlayerRepository 和 PlayerService。各 Router 也配置了 Swagger 中的接口分组。
 
 ### API 输入与输出契约
 

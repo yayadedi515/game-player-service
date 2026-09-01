@@ -2,6 +2,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 import main
+import dependencies
 from main import app
 from player_repository import PlayerRepository
 from player_repository_protocol import PlayerRepositoryProtocol
@@ -174,7 +175,7 @@ def fake_service():
         return service
 
     app.dependency_overrides[
-        main.get_player_service
+        dependencies.get_player_service
     ] = provide_fake_service
 
     try:
@@ -820,8 +821,15 @@ def test_transfer_score_unexpected_error_returns_500(fake_service):
     }
 
 
-def test_get_player_repository_returns_player_repository():
-    repository = main.get_player_repository()
+def test_openapi_groups_routes_by_domain():
+    schema = app.openapi()
 
-    assert isinstance(repository, PlayerRepository)
-    assert isinstance(repository, PlayerRepositoryProtocol)
+    assert schema["paths"]["/health"]["get"]["tags"] == [
+        "Health"
+    ]
+    assert schema["paths"]["/players/{name}"]["get"]["tags"] == [
+        "Players"
+    ]
+    assert schema["paths"]["/transfers"]["post"]["tags"] == [
+        "Transfers"
+    ]
