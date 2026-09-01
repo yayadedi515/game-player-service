@@ -42,6 +42,7 @@ HTTP → FastAPI → PlayerService → PostgreSQL Repository → Psycopg → Pos
 * Python 3.11
 * FastAPI
 * Pydantic
+* pydantic-settings
 * Uvicorn
 * PostgreSQL
 * Psycopg 3
@@ -193,7 +194,7 @@ python -m pytest -m "not integration" -q
 実行結果：
 
 ```text
-83 passed
+91 passed
 ```
 
 PostgreSQL Repository・API統合テスト：
@@ -217,7 +218,7 @@ python -m pytest -q
 現在の実行結果：
 
 ```text
-137 passed
+145 passed
 ```
 
 統合テストには、意図的にPostgreSQLの整数上限超過を発生させるテストが含まれています。スコアの加算処理が途中で失敗した場合でも、送信者の減算、受信者の加算、移動履歴の追加がすべてロールバックされることを確認しています。
@@ -241,6 +242,7 @@ python -m pytest -q
 ├── player_repository_protocol.py
 ├── player_repository.py
 ├── exception_handlers.py
+├── settings.py
 ├── database.py
 ├── database/
 │   └── schema.sql
@@ -253,6 +255,8 @@ python -m pytest -q
 ├── test_dependencies.py
 ├── test_health_router.py
 ├── test_exception_handlers.py
+├── test_settings.py
+├── test_database.py
 ├── conftest.py
 ├── pytest.ini
 ├── requirements.txt
@@ -284,6 +288,10 @@ FastAPIのendpointはRepositoryを直接呼び出さず、PlayerServiceを経由
 3. `transfer_history`へ履歴を追加する
 
 途中でデータベース例外が発生した場合は、すべての変更をロールバックします。
+
+### 環境設定の一元管理
+
+`pydantic-settings`を使用して、PostgreSQLの接続設定を環境変数または`.env`から読み込み、必須項目とポート番号の範囲を検証しています。`DB_PASSWORD`は`SecretStr`で通常の表示時にマスクし、`get_settings()`によって検証済みの設定をキャッシュします。テストではキャッシュを明示的にクリアし、テスト用データベースの設定を分離しています。
 
 ### 同時更新への対応
 
@@ -325,7 +333,6 @@ Pydanticを使用して、プレイヤー名の空白除去・文字数制限、
 
 ## 今後の予定
 
-* 環境設定の一元管理
 * データベースマイグレーションの導入
 * Docker Composeによる実行環境の構築
 * GitHub Actionsによる自動テスト
@@ -383,6 +390,7 @@ HTTP → FastAPI → PlayerService → PostgreSQL Repository → Psycopg → Pos
 * Python 3.11
 * FastAPI
 * Pydantic
+* pydantic-settings
 * Uvicorn
 * PostgreSQL
 * Psycopg 3
@@ -497,7 +505,7 @@ python -m pytest -m "not integration" -q
 当前结果：
 
 ```text
-83 passed
+91 passed
 ```
 
 PostgreSQL Repository 与 API 集成测试：
@@ -521,7 +529,7 @@ python -m pytest -q
 当前结果：
 
 ```text
-137 passed
+145 passed
 ```
 
 ### 事务设计
@@ -551,6 +559,10 @@ python -m pytest -q
 积分转移时，Repository 返回`TransferResult` Enum，PlayerService 将其转换为成功数据，或`PlayerNotFoundError`、`InsufficientScoreError`、`InvalidTransferError`、`UnexpectedTransferResultError`等业务异常。
 
 `exception_handlers.py` 统一把业务异常转换为`400`、`404`、`409`、`422`、`500`等 HTTP 响应。对于未定义的技术异常，系统会把详细信息和 traceback 写入服务器日志，同时只向客户端返回不包含内部信息的`{"detail": "Internal server error"}`。
+
+### 集中管理环境配置
+
+项目使用 `pydantic-settings` 从环境变量或 `.env` 读取 PostgreSQL 连接配置，并验证必填项和端口范围。`DB_PASSWORD` 使用 `SecretStr` 在普通输出中隐藏密码，`get_settings()` 会缓存已经验证的配置。测试会显式清除缓存，以隔离测试数据库配置。
 
 ### Service 层与依赖替换
 
@@ -593,7 +605,6 @@ FastAPI endpoint 不再直接调用 Repository，而是通过 PlayerService 执�
 
 ### 后续计划
 
-* 集中管理环境配置
 * 引入数据库迁移工具
 * 使用 Docker Compose 构建运行环境
 * 使用 GitHub Actions 自动运行测试

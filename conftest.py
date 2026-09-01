@@ -1,6 +1,7 @@
 import pytest
 
 from database import get_connection
+from settings import get_settings
 
 
 TEST_DATABASE = "game_player_service_test"
@@ -9,28 +10,48 @@ TEST_DATABASE = "game_player_service_test"
 @pytest.fixture
 def reset_test_database(monkeypatch):
     monkeypatch.setenv("DB_NAME", TEST_DATABASE)
+    get_settings.cache_clear()
 
-    with get_connection() as connection:
-        assert connection.info.dbname == TEST_DATABASE
-
-        with connection.cursor() as cursor:
-            cursor.execute(
-                "TRUNCATE TABLE transfer_history, players RESTART IDENTITY"
-            )
-            cursor.execute(
-                """
-                INSERT INTO players (name, score)
-                VALUES (%s, %s)
-                """,
-                ("Alice", 90)
+    try:
+        with get_connection() as connection:
+            assert (
+                connection.info.dbname
+                == TEST_DATABASE
             )
 
-    yield
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    TRUNCATE TABLE
+                        transfer_history,
+                        players
+                    RESTART IDENTITY
+                    """
+                )
+                cursor.execute(
+                    """
+                    INSERT INTO players (name, score)
+                    VALUES (%s, %s)
+                    """,
+                    ("Alice", 90)
+                )
 
-    with get_connection() as connection:
-        assert connection.info.dbname == TEST_DATABASE
+        yield
 
-        with connection.cursor() as cursor:
-            cursor.execute(
-                "TRUNCATE TABLE transfer_history, players RESTART IDENTITY"
+        with get_connection() as connection:
+            assert (
+                connection.info.dbname
+                == TEST_DATABASE
             )
+
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    TRUNCATE TABLE
+                        transfer_history,
+                        players
+                    RESTART IDENTITY
+                    """
+                )
+    finally:
+        get_settings.cache_clear()

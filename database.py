@@ -1,19 +1,18 @@
-import os
-from pathlib import Path
-
 import psycopg
-from dotenv import load_dotenv
 
-
-BASE_DIR = Path(__file__).resolve().parent
-load_dotenv(BASE_DIR / ".env")
+from settings import get_settings
 
 
 def get_connection():
+    settings = get_settings()
+
     return psycopg.connect(
-        host=os.environ["DB_HOST"],
-        port=os.environ["DB_PORT"],
-        dbname=os.environ["DB_NAME"],
-        user=os.environ["DB_USER"],
-        password=os.environ["DB_PASSWORD"]
+        host=settings.db_host,
+        port=settings.db_port,
+        dbname=settings.db_name,
+        user=settings.db_user,
+        password=(
+            settings.db_password
+            .get_secret_value()
+        )
     )
