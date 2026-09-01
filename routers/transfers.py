@@ -1,14 +1,8 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Query
 
 from dependencies import get_player_service
-from player_exceptions import (
-    InsufficientScoreError,
-    InvalidTransferError,
-    PlayerNotFoundError,
-    UnexpectedTransferResultError
-)
 from schemas import ScoreTransfer, TransferResponse, TransferHistoryResponse
 
 
@@ -24,38 +18,11 @@ def transfer_player_score(
         transfer: ScoreTransfer,
         service=Depends(get_player_service)
 ):
-    try:
-        transfer_result = service.transfer_score(
-            transfer.sender,
-            transfer.receiver,
-            transfer.points
-        )
-
-    except PlayerNotFoundError as error:
-        raise HTTPException(
-            status_code=404,
-            detail="Player not found"
-        ) from error
-
-    except InsufficientScoreError as error:
-        raise HTTPException(
-            status_code=409,
-            detail="Insufficient score"
-        ) from error
-
-    except InvalidTransferError as error:
-        raise HTTPException(
-            status_code=422,
-            detail="Invalid transfer"
-        ) from error
-
-    except UnexpectedTransferResultError as error:
-        raise HTTPException(
-            status_code=500,
-            detail="Unexpected transfer result"
-        ) from error
-
-    return transfer_result
+    return service.transfer_score(
+        transfer.sender,
+        transfer.receiver,
+        transfer.points
+    )
 
 
 @router.get(

@@ -30,7 +30,7 @@
 
 以前は機能を変更するたびに、APIや各処理を手動で一つずつ確認していました。自動テストを追加したことで、変更による影響をまとめて確認できるようになり、確認漏れを減らすことができました。
 
-現在は、コンポーネントテスト、依存関係を差し替えたAPI単体テスト、PostgreSQLを使用するRepository・API統合テストを合わせた128件のテストを、自分の開発環境では約8秒で実行できます。
+現在は、コンポーネントテスト、依存関係を差し替えたAPI単体テスト、PostgreSQLを使用するRepository・API統合テストを合わせた137件のテストを自動実行できます。
 
 また、テストが失敗した場所から原因を調べられるため、手動確認だけの場合よりも修正箇所を見つけやすくなりました。
 
@@ -38,6 +38,6 @@
 
 現在、`main.py`はアプリ起動用の入口に限定し、`app_factory.py`がFastAPIアプリケーションと各Routerを組み立てています。`routers/health.py`、`routers/players.py`、`routers/transfers.py`は関連するendpointを分担し、`dependencies.py`が通常実行時のPlayerRepositoryとPlayerServiceを生成します。PlayerServiceはRepositoryの返却値やデータベース制約例外を、成功データまたは業務例外に変換します。`PlayerRepositoryProtocol`により、PlayerServiceが必要とするデータアクセス契約を明示しています。通常の実行時には`PlayerRepository`がPostgreSQLへアクセスし、Service単体テストでは`FakeRepository`が同じ契約を満たします。
 
-今後はPydanticによる入力検証をさらに強化し、Dockerによる実行環境とCIによる自動テストを追加する予定です。
+今後は環境設定とデータベースマイグレーションを整備し、Docker Composeによる実行環境、GitHub Actionsによる自動テスト、Redisによるキャッシュを追加する予定です。
 
 技術的な詳細、実行方法、テスト方法は[README](README.md)に記載しています。

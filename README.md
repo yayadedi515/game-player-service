@@ -12,7 +12,7 @@
 
 | レイヤー                  | 主な機能                                      | データ保存先       |
 |------------------------|-------------------------------------------|--------------|
-| FastAPI API            | HTTPリクエスト・レスポンス、ステータスコード変換              | PlayerService経由 |
+| FastAPI API / Router   | HTTPリクエスト・レスポンス、入力検証、グローバル例外変換 | PlayerService経由 |
 | PlayerService          | APIユースケースの調整、Repository契約に基づく業務結果・業務例外への変換 | PlayerRepositoryProtocol経由 |
 | PostgreSQL Repository  | PlayerRepositoryクラス、SQL、トランザクション、PostgreSQLデータアクセス | PostgreSQL |
 | Legacy PlayerService   | 基礎的な業務ロジック、JSON保存・読込                     | メモリ／JSON       |
@@ -193,7 +193,7 @@ python -m pytest -m "not integration" -q
 実行結果：
 
 ```text
-74 passed
+83 passed
 ```
 
 PostgreSQL Repository・API統合テスト：
@@ -217,7 +217,7 @@ python -m pytest -q
 現在の実行結果：
 
 ```text
-128 passed
+137 passed
 ```
 
 統合テストには、意図的にPostgreSQLの整数上限超過を発生させるテストが含まれています。スコアの加算処理が途中で失敗した場合でも、送信者の減算、受信者の加算、移動履歴の追加がすべてロールバックされることを確認しています。
@@ -240,6 +240,7 @@ python -m pytest -q
 ├── player_exceptions.py
 ├── player_repository_protocol.py
 ├── player_repository.py
+├── exception_handlers.py
 ├── database.py
 ├── database/
 │   └── schema.sql
@@ -251,6 +252,7 @@ python -m pytest -q
 ├── test_app_factory.py
 ├── test_dependencies.py
 ├── test_health_router.py
+├── test_exception_handlers.py
 ├── conftest.py
 ├── pytest.ini
 ├── requirements.txt
@@ -271,6 +273,7 @@ FastAPIのendpointはRepositoryを直接呼び出さず、PlayerServiceを経由
 ### アプリケーション組み立てとルーティング
 
 `app_factory.py`の`create_app()`がFastAPIアプリケーションを生成し、`main.py`はUvicorn起動用の`app`を公開します。`routers/health.py`、`routers/players.py`、`routers/transfers.py`は関連するendpointを分担し、`dependencies.py`が通常実行時のPlayerRepositoryとPlayerServiceを生成します。各RouterにはSwagger上の表示グループも設定しています。
+各Routerは成功時の処理に集中し、PlayerServiceから送出された業務例外は`exception_handlers.py`が一括してHTTPレスポンスへ変換します。
 
 ### トランザクションの原子性
 
@@ -288,7 +291,9 @@ FastAPIのendpointはRepositoryを直接呼び出さず、PlayerServiceを経由
 
 ### 明確な業務結果
 
-スコア移動では、Repositoryは`TransferResult` Enumを返します。PlayerServiceはこれを成功データ、または`PlayerNotFoundError`、`InsufficientScoreError`、`InvalidTransferError`、`UnexpectedTransferResultError`などの業務例外に変換します。FastAPIは成功時に`201`を返し、各業務例外を`404`、`409`、`422`、`500`のHTTPレスポンスに変換します。
+スコア移動では、Repositoryが`TransferResult` Enumを返し、PlayerServiceが成功データまたは`PlayerNotFoundError`、`InsufficientScoreError`、`InvalidTransferError`、`UnexpectedTransferResultError`などの業務例外へ変換します。
+
+`exception_handlers.py`は業務例外を一括して`400`、`404`、`409`、`422`、`500`のHTTPレスポンスへ変換します。未定義の技術例外については、詳細とtracebackをサーバーログに記録し、クライアントには内部情報を含まない`{"detail": "Internal server error"}`を返します。
 
 ### テスト設計
 
@@ -313,14 +318,19 @@ Pydanticを使用して、プレイヤー名の空白除去・文字数制限、
 ## 現在の制約
 
 * 認証・認可は未実装です。
+* データベーススキーマは`schema.sql`で手動管理しており、マイグレーションツールは未導入です。
+* Redisなどのキャッシュは未導入です。
 * Docker化および本番環境へのデプロイは未実装です。
 * 本プロジェクトは開発中のポートフォリオであり、本番運用を目的とした完成済みシステムではありません。
 
 ## 今後の予定
 
-* Pydanticによるリクエスト境界の検証強化
-* Dockerによる実行環境の構築
-* CIによる自動テスト
+* 環境設定の一元管理
+* データベースマイグレーションの導入
+* Docker Composeによる実行環境の構築
+* GitHub Actionsによる自動テスト
+* Redisによるキャッシュの導入
+* 認証・認可の実装
 
 
 
@@ -342,7 +352,7 @@ Game Player Service 是一个以游戏玩家管理为场景的 Python 后端作�
 
 | 层级                    | 主要职责                         | 数据存储       |
 |-----------------------|------------------------------|------------|
-| FastAPI API           | HTTP 请求与响应、状态码转换             | 通过 PlayerService |
+| FastAPI API / Router  | HTTP 请求与响应、输入验证、全局异常转换 | 通过 PlayerService |
 | PlayerService         | 组织 API 用例、基于 Repository 契约转换业务结果与业务异常 | 通过 PlayerRepositoryProtocol |
 | PostgreSQL Repository | PlayerRepository 类、SQL、事务及 PostgreSQL 数据访问 | PostgreSQL |
 | Legacy PlayerService  | 基础业务逻辑、JSON 保存与读取            | 内存／JSON    |
@@ -487,7 +497,7 @@ python -m pytest -m "not integration" -q
 当前结果：
 
 ```text
-74 passed
+83 passed
 ```
 
 PostgreSQL Repository 与 API 集成测试：
@@ -511,7 +521,7 @@ python -m pytest -q
 当前结果：
 
 ```text
-128 passed
+137 passed
 ```
 
 ### 事务设计
@@ -538,7 +548,9 @@ python -m pytest -q
 
 ### 明确的业务结果
 
-积分转移时，Repository 返回`TransferResult` Enum。PlayerService 将其转换为成功数据，或`PlayerNotFoundError`、`InsufficientScoreError`、`InvalidTransferError`、`UnexpectedTransferResultError`等业务异常。FastAPI 在成功时返回`201`，并将各业务异常转换为`404`、`409`、`422`、`500`等 HTTP 响应。
+积分转移时，Repository 返回`TransferResult` Enum，PlayerService 将其转换为成功数据，或`PlayerNotFoundError`、`InsufficientScoreError`、`InvalidTransferError`、`UnexpectedTransferResultError`等业务异常。
+
+`exception_handlers.py` 统一把业务异常转换为`400`、`404`、`409`、`422`、`500`等 HTTP 响应。对于未定义的技术异常，系统会把详细信息和 traceback 写入服务器日志，同时只向客户端返回不包含内部信息的`{"detail": "Internal server error"}`。
 
 ### Service 层与依赖替换
 
@@ -547,6 +559,7 @@ FastAPI endpoint 不再直接调用 Repository，而是通过 PlayerService 执�
 ### 应用组装与路由
 
 `app_factory.py` 中的 `create_app()` 负责创建 FastAPI 应用，`main.py` 只公开供 Uvicorn 启动的 `app`。`routers/health.py`、`routers/players.py` 和 `routers/transfers.py` 分别负责相关接口，`dependencies.py` 在正常运行时创建 PlayerRepository 和 PlayerService。各 Router 也配置了 Swagger 中的接口分组。
+各 Router 只处理成功流程，PlayerService 抛出的业务异常统一由 `exception_handlers.py` 转换为 HTTP 响应。
 
 ### API 输入与输出契约
 
@@ -573,11 +586,16 @@ FastAPI endpoint 不再直接调用 Repository，而是通过 PlayerService 执�
 ### 当前限制
 
 * 尚未实现认证和权限控制
+* 数据库结构仍通过`schema.sql`手动管理，尚未引入迁移工具
+* 尚未引入 Redis 等缓存
 * 尚未完成 Docker 化和线上部署
 * 当前是持续开发中的作品集项目，不能视为已经完成的生产级系统
 
 ### 后续计划
 
-* 加强 Pydantic 请求边界验证
-* 增加 Docker 运行环境
-* 使用 CI 自动运行测试
+* 集中管理环境配置
+* 引入数据库迁移工具
+* 使用 Docker Compose 构建运行环境
+* 使用 GitHub Actions 自动运行测试
+* 引入 Redis 缓存
+* 实现认证和权限控制

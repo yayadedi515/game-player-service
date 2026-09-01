@@ -1,11 +1,6 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 
 from dependencies import get_player_service
-from player_exceptions import (
-    PlayerNotFoundError,
-    DuplicatePlayerError,
-    PlayerDeletionRestrictedError,
-)
 from schemas import (
     PlayerName,
     PlayerResponse,
@@ -26,13 +21,7 @@ def get_player(
         name: PlayerName,
         service=Depends(get_player_service)
 ):
-    try:
-        player = service.get_player(name)
-    except PlayerNotFoundError as error:
-        raise HTTPException(
-            status_code=404,
-            detail="Player not found"
-        ) from error
+    player = service.get_player(name)
 
     return {
         "name": player["name"],
@@ -71,13 +60,9 @@ def create_player(
     player: PlayerCreate,
     service=Depends(get_player_service)
 ):
-    try:
-        created_player = service.create_player(player.name)
-    except DuplicatePlayerError as error:
-        raise HTTPException(
-            status_code=400,
-            detail="Invalid or duplicate player"
-        ) from error
+    created_player = service.create_player(
+        player.name
+    )
 
     return {
         "name": created_player["name"],
@@ -94,20 +79,7 @@ def delete_player(
     name: PlayerName,
     service=Depends(get_player_service)
 ):
-    try:
-        deleted_player = service.delete_player(name)
-
-    except PlayerNotFoundError as error:
-        raise HTTPException(
-            status_code=404,
-            detail="Player not found"
-        ) from error
-
-    except PlayerDeletionRestrictedError as error:
-        raise HTTPException(
-            status_code=409,
-            detail="Player has transfer history"
-        ) from error
+    deleted_player = service.delete_player(name)
 
     return {
         "message": (
@@ -121,20 +93,14 @@ def delete_player(
     response_model=PlayerResponse
 )
 def add_player_score(
-        name: PlayerName,
-        score_add: ScoreAdd,
-        service=Depends(get_player_service)
+    name: PlayerName,
+    score_add: ScoreAdd,
+    service=Depends(get_player_service)
 ):
-    try:
-        player = service.add_score(
-            name,
-            score_add.points
-        )
-    except PlayerNotFoundError as error:
-        raise HTTPException(
-            status_code=404,
-            detail="Player not found"
-        ) from error
+    player = service.add_score(
+        name,
+        score_add.points
+    )
 
     return {
         "name": player["name"],
