@@ -30,7 +30,7 @@
 
 以前は機能を変更するたびに、APIや各処理を手動で一つずつ確認していました。自動テストを追加したことで、変更による影響をまとめて確認できるようになり、確認漏れを減らすことができました。
 
-現在は、コンポーネントテスト、依存関係を差し替えたAPI単体テスト、PostgreSQLを使用するRepository・API統合テストを合わせた145件のテストを自動実行できます。
+現在は、コンポーネントテスト、依存関係を差し替えたAPI単体テスト、PostgreSQLを使用するRepository・API統合テストを合わせた146件のテストを自動実行できます。
 
 また、テストが失敗した場所から原因を調べられるため、手動確認だけの場合よりも修正箇所を見つけやすくなりました。
 
@@ -38,8 +38,10 @@
 
 現在、`main.py`はアプリ起動用の入口に限定し、`app_factory.py`がFastAPIアプリケーションと各Routerを組み立てています。`routers/health.py`、`routers/players.py`、`routers/transfers.py`は関連するendpointを分担し、`dependencies.py`が通常実行時のPlayerRepositoryとPlayerServiceを生成します。PlayerServiceはRepositoryの返却値やデータベース制約例外を、成功データまたは業務例外に変換します。`PlayerRepositoryProtocol`により、PlayerServiceが必要とするデータアクセス契約を明示しています。通常の実行時には`PlayerRepository`がPostgreSQLへアクセスし、Service単体テストでは`FakeRepository`が同じ契約を満たします。
 
-今後はデータベースマイグレーションを整備し、Docker Composeによる実行環境、GitHub Actionsによる自動テスト、Redisによるキャッシュを追加する予定です。
+今後はDocker Composeによる実行環境、GitHub Actionsによる自動テスト、Redisによるキャッシュを追加する予定です。
 
 技術的な詳細、実行方法、テスト方法は[README](README.md)に記載しています。
 
 また、`pydantic-settings`を使用してPostgreSQL接続設定を一元管理し、必須項目と値の範囲を検証した上で、検証済みの設定をキャッシュしています。
+
+さらに、Alembicを導入してデータベーススキーマをバージョン管理し、統合テスト開始時に最新のマイグレーションを自動適用する構成にしました。

@@ -46,6 +46,8 @@ HTTP → FastAPI → PlayerService → PostgreSQL Repository → Psycopg → Pos
 * Uvicorn
 * PostgreSQL
 * Psycopg 3
+* SQLAlchemy
+* Alembic
 * python-dotenv
 * pytest
 * HTTPX2
@@ -169,19 +171,18 @@ CREATE DATABASE game_player_service;
 CREATE DATABASE game_player_service_test;
 ```
 
-### 3. テーブルの作成
+### 3. マイグレーションの実行
 
-両方のデータベースに`database/schema.sql`を適用します。
+`.env`の`DB_NAME`で指定した通常利用用データベースに、最新のマイグレーションを適用します。
 
-```bash
-psql -U your_database_user -d game_player_service -f database/schema.sql
-psql -U your_database_user -d game_player_service_test -f database/schema.sql
+```powershell
+python -m alembic upgrade head
 ```
 
-Repository統合テストでは、データベース名を自動的に`game_player_service_test`へ切り替えます。ホスト、ポート、ユーザー、パスワードは`.env`の設定を使用します。
+統合テストの開始時には、`migrated_test_database` fixtureが接続先を`game_player_service_test`へ切り替え、同じマイグレーションを自動的に適用します。ホスト、ポート、ユーザー、パスワードには`.env`の設定を使用します。
 
 > [!WARNING]
-> 統合テストは`game_player_service_test`内の`players`と`transfer_history`をテスト前後に削除します。重要なデータを保存しないでください。
+> 統合テストは`game_player_service_test`内の`players`と`transfer_history`のデータをテスト前後に削除します。重要なデータを保存しないでください。
 
 ## テスト
 
@@ -206,7 +207,7 @@ python -m pytest -m integration -q
 実行結果：
 
 ```text
-54 passed
+55 passed
 ```
 
 全テスト：
@@ -218,7 +219,7 @@ python -m pytest -q
 現在の実行結果：
 
 ```text
-145 passed
+146 passed
 ```
 
 統合テストには、意図的にPostgreSQLの整数上限超過を発生させるテストが含まれています。スコアの加算処理が途中で失敗した場合でも、送信者の減算、受信者の加算、移動履歴の追加がすべてロールバックされることを確認しています。
@@ -244,8 +245,13 @@ python -m pytest -q
 ├── exception_handlers.py
 ├── settings.py
 ├── database.py
-├── database/
-│   └── schema.sql
+├── alembic.ini
+├── migrations/
+│   ├── README
+│   ├── env.py
+│   ├── script.py.mako
+│   └── versions/
+│       └── 019dd3348d7e_create_players_and_transfer_history_.py
 ├── test_main.py
 ├── test_main_integration.py
 ├── test_player_service.py
@@ -257,6 +263,7 @@ python -m pytest -q
 ├── test_exception_handlers.py
 ├── test_settings.py
 ├── test_database.py
+├── test_migrations.py
 ├── conftest.py
 ├── pytest.ini
 ├── requirements.txt
@@ -288,6 +295,12 @@ FastAPIのendpointはRepositoryを直接呼び出さず、PlayerServiceを経由
 3. `transfer_history`へ履歴を追加する
 
 途中でデータベース例外が発生した場合は、すべての変更をロールバックします。
+
+### データベースマイグレーション
+
+Alembicを使用して、PostgreSQLのテーブル構造をバージョン管理しています。最初のマイグレーションでは`players`と`transfer_history`を作成し、外部キー、CHECK制約、UNIQUE制約も定義しています。
+
+新しいデータベースには`alembic upgrade head`で最新構造を作成します。既に同じ構造を持つ開発データベースには`alembic stamp head`を使用し、テーブルを再作成せずに現在のバージョンだけを登録しました。統合テストでは、テスト開始時に最新のマイグレーションを自動適用します。
 
 ### 環境設定の一元管理
 
@@ -326,14 +339,12 @@ Pydanticを使用して、プレイヤー名の空白除去・文字数制限、
 ## 現在の制約
 
 * 認証・認可は未実装です。
-* データベーススキーマは`schema.sql`で手動管理しており、マイグレーションツールは未導入です。
 * Redisなどのキャッシュは未導入です。
 * Docker化および本番環境へのデプロイは未実装です。
 * 本プロジェクトは開発中のポートフォリオであり、本番運用を目的とした完成済みシステムではありません。
 
 ## 今後の予定
 
-* データベースマイグレーションの導入
 * Docker Composeによる実行環境の構築
 * GitHub Actionsによる自動テスト
 * Redisによるキャッシュの導入
@@ -394,6 +405,8 @@ HTTP → FastAPI → PlayerService → PostgreSQL Repository → Psycopg → Pos
 * Uvicorn
 * PostgreSQL
 * Psycopg 3
+* SQLAlchemy
+* Alembic
 * python-dotenv
 * pytest
 * HTTPX2
@@ -472,7 +485,7 @@ http://127.0.0.1:8000/docs
 Copy-Item .env.example .env
 ```
 
-在本地 `.env` 中填写数据库连接信息：
+在创建的 `.env` 中填写自己的 PostgreSQL 连接信息：
 
 ```dotenv
 DB_HOST=localhost
@@ -482,17 +495,29 @@ DB_USER=your_database_user
 DB_PASSWORD=your_database_password
 ```
 
-需要准备两个数据库：
+`.env` 已被 Git 忽略，请勿把真实密码或数据库连接信息提交到 GitHub。
 
-* `game_player_service`：Repository 的普通开发数据库
-* `game_player_service_test`：Repository 集成测试专用数据库
+### 2. 创建数据库
 
-然后分别执行 `database/schema.sql` 创建数据表。
+需要创建普通开发和集成测试使用的两个数据库：
 
-`.env` 已被 Git 忽略，真实密码和数据库连接信息没有提交到公开仓库。
+```sql
+CREATE DATABASE game_player_service;
+CREATE DATABASE game_player_service_test;
+```
+
+### 3. 执行数据库迁移
+
+对 `.env` 的 `DB_NAME` 指定的普通开发数据库执行最新迁移：
+
+```powershell
+python -m alembic upgrade head
+```
+
+集成测试开始时，`migrated_test_database` fixture 会把连接目标切换到 `game_player_service_test`，并自动执行相同的数据库迁移。主机、端口、用户名和密码继续使用 `.env` 中的配置。
 
 > [!WARNING]
-> Repository 集成测试会在测试前后清空 `game_player_service_test` 中的玩家和转移历史。请勿在该测试数据库中保存重要数据。
+> 集成测试会在测试前后清空 `game_player_service_test` 中 `players` 和 `transfer_history` 表内的数据。请勿在该测试数据库中保存重要数据。
 
 ### 自动化测试
 
@@ -517,7 +542,7 @@ python -m pytest -m integration -q
 当前结果：
 
 ```text
-54 passed
+55 passed
 ```
 
 执行全部测试：
@@ -529,7 +554,7 @@ python -m pytest -q
 当前结果：
 
 ```text
-145 passed
+146 passed
 ```
 
 ### 事务设计
@@ -563,6 +588,12 @@ python -m pytest -q
 ### 集中管理环境配置
 
 项目使用 `pydantic-settings` 从环境变量或 `.env` 读取 PostgreSQL 连接配置，并验证必填项和端口范围。`DB_PASSWORD` 使用 `SecretStr` 在普通输出中隐藏密码，`get_settings()` 会缓存已经验证的配置。测试会显式清除缓存，以隔离测试数据库配置。
+
+### 数据库迁移
+
+项目使用 Alembic 对 PostgreSQL 表结构进行版本管理。第一份迁移负责创建 `players` 和 `transfer_history`，并定义外键、CHECK 约束和 UNIQUE 约束。
+
+新数据库通过 `alembic upgrade head` 创建最新结构。对于已经具有相同结构的开发数据库，使用 `alembic stamp head` 只登记当前版本，不重复创建数据表。集成测试会在开始时自动应用最新迁移。
 
 ### Service 层与依赖替换
 
@@ -598,14 +629,12 @@ FastAPI endpoint 不再直接调用 Repository，而是通过 PlayerService 执�
 ### 当前限制
 
 * 尚未实现认证和权限控制
-* 数据库结构仍通过`schema.sql`手动管理，尚未引入迁移工具
 * 尚未引入 Redis 等缓存
 * 尚未完成 Docker 化和线上部署
 * 当前是持续开发中的作品集项目，不能视为已经完成的生产级系统
 
 ### 后续计划
 
-* 引入数据库迁移工具
 * 使用 Docker Compose 构建运行环境
 * 使用 GitHub Actions 自动运行测试
 * 引入 Redis 缓存
