@@ -207,7 +207,7 @@ python -m pytest -m integration -q
 実行結果：
 
 ```text
-55 passed
+56 passed
 ```
 
 全テスト：
@@ -252,6 +252,7 @@ python -m pytest -q
 │   ├── script.py.mako
 │   └── versions/
 │       └── 019dd3348d7e_create_players_and_transfer_history_.py
+│       └── 8823f987778c_add_transfer_history_foreign_key_indexes.py
 ├── test_main.py
 ├── test_main_integration.py
 ├── test_player_service.py
@@ -298,7 +299,7 @@ FastAPIのendpointはRepositoryを直接呼び出さず、PlayerServiceを経由
 
 ### データベースマイグレーション
 
-Alembicを使用して、PostgreSQLのテーブル構造をバージョン管理しています。最初のマイグレーションでは`players`と`transfer_history`を作成し、外部キー、CHECK制約、UNIQUE制約も定義しています。
+Alembicを使用して、PostgreSQLのテーブル構造をバージョン管理しています。最初のマイグレーションでは`players`と`transfer_history`を作成し、外部キー、CHECK制約、UNIQUE制約も定義しています。2番目のマイグレーションでは、外部キー確認とプレイヤー別履歴検索を効率化するため、送信者IDと受信者IDにインデックスを追加しています。
 
 新しいデータベースには`alembic upgrade head`で最新構造を作成します。既に同じ構造を持つ開発データベースには`alembic stamp head`を使用し、テーブルを再作成せずに現在のバージョンだけを登録しました。統合テストでは、テスト開始時に最新のマイグレーションを自動適用します。
 
@@ -514,7 +515,7 @@ CREATE DATABASE game_player_service_test;
 python -m alembic upgrade head
 ```
 
-集成测试开始时，`migrated_test_database` fixture 会把连接目标切换到 `game_player_service_test`，并自动执行相同的数据库迁移。主机、端口、用户名和密码继续使用 `.env` 中的配置。
+集成测试开始时，`migrated_test_database` fixture 会把连接目标切换到 `game_player_service_test`，并自动执行相同的数据库迁移。主机、端口、用户名和密码继续使用 `.env` 中的配置。第二份迁移为发送者ID和接收者ID添加索引，以提高外键检查和按玩家查询转移历史时的效率。
 
 > [!WARNING]
 > 集成测试会在测试前后清空 `game_player_service_test` 中 `players` 和 `transfer_history` 表内的数据。请勿在该测试数据库中保存重要数据。
@@ -542,7 +543,7 @@ python -m pytest -m integration -q
 当前结果：
 
 ```text
-55 passed
+56 passed
 ```
 
 执行全部测试：

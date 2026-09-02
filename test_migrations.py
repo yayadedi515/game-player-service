@@ -32,3 +32,25 @@ def test_database_uses_latest_migration():
 
     assert row is not None
     assert row[0] == migrations.get_current_head()
+
+
+def test_transfer_history_foreign_keys_have_indexes():
+    with get_connection() as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT indexname
+                FROM pg_indexes
+                WHERE schemaname = 'public'
+                  AND tablename = 'transfer_history'
+                """
+            )
+            rows = cursor.fetchall()
+
+    index_names = {
+        row[0]
+        for row in rows
+    }
+
+    assert "ix_transfer_history_sender_id" in index_names
+    assert "ix_transfer_history_receiver_id" in index_names
