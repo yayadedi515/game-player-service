@@ -36,12 +36,12 @@
 
 ## 現在の到達点と今後
 
-現在、`main.py`はアプリ起動用の入口に限定し、`app_factory.py`がFastAPIアプリケーションと各Routerを組み立てています。`routers/health.py`、`routers/players.py`、`routers/transfers.py`は関連するendpointを分担し、`dependencies.py`が通常実行時のPlayerRepositoryとPlayerServiceを生成します。PlayerServiceはRepositoryの返却値やデータベース制約例外を、成功データまたは業務例外に変換します。`PlayerRepositoryProtocol`により、PlayerServiceが必要とするデータアクセス契約を明示しています。通常の実行時には`PlayerRepository`がPostgreSQLへアクセスし、Service単体テストでは`FakeRepository`が同じ契約を満たします。
+現在、`main.py`はアプリ起動用の入口に限定し、`app_factory.py`がFastAPIアプリケーションと各Routerを組み立てています。`routers/health.py`、`routers/players.py`、`routers/transfers.py`は関連するendpointを分担し、`dependencies.py`が通常実行時のPlayerRepositoryとPlayerServiceを生成します。PlayerServiceはRepositoryの返却値やデータベース制約例外を、成功データまたは業務例外に変換します。`PlayerRepositoryProtocol`により、PlayerServiceが必要とするデータアクセス契約を明示しています。
 
-今後はDocker Composeによる実行環境、GitHub Actionsによる自動テスト、Redisによるキャッシュを追加する予定です。
+また、`pydantic-settings`を使用してPostgreSQL接続設定を一元管理し、必須項目と値の範囲を検証した上で、検証済みの設定をキャッシュしています。Alembicによってデータベーススキーマをバージョン管理し、統合テスト開始時には最新のマイグレーションを自動適用します。
+
+さらに、FastAPIアプリケーションをDockerイメージとして構築できるようにしました。不要なファイルや`.env`をイメージから除外し、非rootユーザーでアプリケーションを実行するとともに、`HEALTHCHECK`によってAPIの状態を確認します。
+
+今後はPostgreSQLを含むDocker Compose実行環境、GitHub Actionsによる自動テスト、Redisによるキャッシュを追加する予定です。
 
 技術的な詳細、実行方法、テスト方法は[README](README.md)に記載しています。
-
-また、`pydantic-settings`を使用してPostgreSQL接続設定を一元管理し、必須項目と値の範囲を検証した上で、検証済みの設定をキャッシュしています。
-
-さらに、Alembicを導入してデータベーススキーマをバージョン管理し、統合テスト開始時に最新のマイグレーションを自動適用する構成にしました。

@@ -52,6 +52,7 @@ HTTP → FastAPI → PlayerService → PostgreSQL Repository → Psycopg → Pos
 * pytest
 * HTTPX2
 * Git
+* Docker
 
 ## API
 
@@ -228,6 +229,8 @@ python -m pytest -q
 
 ```text
 .
+├── Dockerfile
+├── .dockerignore
 ├── main.py
 ├── app_factory.py
 ├── dependencies.py
@@ -337,11 +340,36 @@ Pydanticを使用して、プレイヤー名の空白除去・文字数制限、
 
 また、すべての成功レスポンスにレスポンスモデルを設定し、FastAPIが返却データを検証するとともに、Swaggerに明確なAPI仕様を表示します。
 
+## DockerによるAPIの実行
+
+FastAPIアプリケーションのDockerイメージを作成できます。
+
+```powershell
+docker build -t game-player-service:dev .
+```
+
+作成したイメージからコンテナを起動します。
+
+```powershell
+docker run --name game-player-service-api -d -p 8000:8000 game-player-service:dev
+```
+
+起動後、次のURLでヘルスチェックとSwagger UIを確認できます。
+
+```text
+http://localhost:8000/health
+http://localhost:8000/docs
+```
+
+DockerイメージにはPython、依存パッケージ、アプリケーションコード、起動コマンドが含まれます。実際の`.env`はイメージに含めず、設定値はコンテナ実行時に外部から渡します。また、アプリケーションはrootではなく`appuser`で実行し、Dockerの`HEALTHCHECK`で`/health`を定期的に確認します。
+
+現在の単一コンテナ構成でプレイヤー関連APIを利用するには、実行時にデータベース環境変数を渡し、コンテナからPostgreSQLへ接続できる必要があります。PostgreSQLを含む実行環境はDocker Composeで追加する予定です。
+
 ## 現在の制約
 
 * 認証・認可は未実装です。
 * Redisなどのキャッシュは未導入です。
-* Docker化および本番環境へのデプロイは未実装です。
+* FastAPIのDockerイメージ化は完了していますが、PostgreSQLを含むDocker Compose構成と本番環境へのデプロイは未実装です。
 * 本プロジェクトは開発中のポートフォリオであり、本番運用を目的とした完成済みシステムではありません。
 
 ## 今後の予定
@@ -412,6 +440,7 @@ HTTP → FastAPI → PlayerService → PostgreSQL Repository → Psycopg → Pos
 * pytest
 * HTTPX2
 * Git
+* Docker
 
 ### 当前 API
 
@@ -627,11 +656,36 @@ FastAPI endpoint 不再直接调用 Repository，而是通过 PlayerService 执�
 * 数据库更新途中发生异常
 * 事务整体回滚
 
+### 使用 Docker 运行 API
+
+可以通过Dockerfile构建FastAPI应用镜像：
+
+```powershell
+docker build -t game-player-service:dev .
+```
+
+使用构建好的镜像启动容器：
+
+```powershell
+docker run --name game-player-service-api -d -p 8000:8000 game-player-service:dev
+```
+
+启动后可以访问：
+
+```text
+http://localhost:8000/health
+http://localhost:8000/docs
+```
+
+Docker镜像包含Python、依赖包、应用代码和启动命令。真实`.env`不会进入镜像，配置值需要在容器运行时从外部传入。应用使用非root用户`appuser`运行，并通过Docker的`HEALTHCHECK`定期检查`/health`。
+
+在当前单容器结构下，玩家相关API还需要在运行时传入数据库环境变量，并确保容器能够连接PostgreSQL。包含PostgreSQL的完整运行环境将在Docker Compose中实现。
+
 ### 当前限制
 
 * 尚未实现认证和权限控制
 * 尚未引入 Redis 等缓存
-* 尚未完成 Docker 化和线上部署
+* 已完成FastAPI镜像构建，但尚未完成包含PostgreSQL的Docker Compose环境及线上部署
 * 当前是持续开发中的作品集项目，不能视为已经完成的生产级系统
 
 ### 后续计划
