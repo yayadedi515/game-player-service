@@ -1,5 +1,9 @@
 import pytest
-from psycopg.errors import NumericValueOutOfRange, RestrictViolation
+from psycopg.errors import (
+    ForeignKeyViolation,
+    NumericValueOutOfRange,
+    RestrictViolation,
+)
 
 from database import get_connection
 from player_repository import PlayerRepository
@@ -472,13 +476,15 @@ def test_delete_blank_player_returns_none():
     assert result is not None
 
 
-def test_delete_player_with_transfer_history_raises_restrict_violation():
+def test_delete_player_with_transfer_history_raises_reference_violation():
     repository.create_player("Bob")
     success = repository.transfer_score("Alice", "Bob", 10)
 
     assert success is TransferResult.SUCCESS
 
-    with pytest.raises(RestrictViolation):
+    with pytest.raises(
+        (ForeignKeyViolation, RestrictViolation)
+    ):
         repository.delete_player("Alice")
 
     result = repository.find_player_by_name("Alice")

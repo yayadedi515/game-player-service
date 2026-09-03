@@ -1,4 +1,7 @@
-from psycopg.errors import RestrictViolation
+from psycopg.errors import (
+    ForeignKeyViolation,
+    RestrictViolation,
+)
 
 from transfer_result import TransferResult
 from player_repository_protocol import PlayerRepositoryProtocol
@@ -49,7 +52,10 @@ class PlayerService:
     def delete_player(self, name):
         try:
             player = self.repository.delete_player(name)
-        except RestrictViolation as error:
+        except (
+            ForeignKeyViolation,
+            RestrictViolation
+        ) as error:
             raise PlayerDeletionRestrictedError from error
 
         if player is None:
