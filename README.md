@@ -1,5 +1,9 @@
 # Game Player Service
+
+[![CI](https://github.com/yayadedi515/game-player-service/actions/workflows/ci.yml/badge.svg)](https://github.com/yayadedi515/game-player-service/actions/workflows/ci.yml)
+
 **日本語** | [简体中文](#中文说明)
+
 プレイヤー管理を題材に、FastAPI、PostgreSQL、トランザクション処理、pytestによる自動テストを実践したPythonバックエンドのポートフォリオです。
 
 プレイヤーの作成・検索・削除、スコア管理、ランキング、プレイヤー間のスコア移動、移動履歴などを実装しています。
@@ -53,6 +57,7 @@ HTTP → FastAPI → PlayerService → PostgreSQL Repository → Psycopg → Pos
 * HTTPX2
 * Git
 * Docker
+* GitHub Actions
 * Docker Compose
 
 ## API
@@ -226,14 +231,25 @@ python -m pytest -q
 
 統合テストには、意図的にPostgreSQLの整数上限超過を発生させるテストが含まれています。スコアの加算処理が途中で失敗した場合でも、送信者の減算、受信者の加算、移動履歴の追加がすべてロールバックされることを確認しています。
 
+## GitHub ActionsによるCI
+
+`.github/workflows/ci.yml`により、pushおよびpull requestのたびに次の処理を自動実行します。
+
+* `component-tests`：PostgreSQLを使用しない91件のテスト
+* `integration-tests`：PostgreSQL 17の起動、Alembicマイグレーション、56件の統合テスト
+* `docker-build`：DockerfileからAPIイメージを構築できることの確認
+
 ## プロジェクト構成
 
 ```text
 .
 ├── Dockerfile
 ├── .dockerignore
-├── compose.yaml
+├── .github/
+│   └── workflows/
+│       └── ci.yml
 ├── main.py
+├── compose.yaml
 ├── app_factory.py
 ├── dependencies.py
 ├── routers/
@@ -379,7 +395,6 @@ Dockerイメージでは不要なファイルと`.env`を除外し、アプリ�
 
 ## 今後の予定
 
-* GitHub Actionsによる自動テスト
 * Redisによるキャッシュの導入
 * 認証・認可の実装
 
@@ -445,6 +460,7 @@ HTTP → FastAPI → PlayerService → PostgreSQL Repository → Psycopg → Pos
 * HTTPX2
 * Git
 * Docker
+* GitHub Actions
 * Docker Compose
 
 ### 当前 API
@@ -592,6 +608,14 @@ python -m pytest -q
 146 passed
 ```
 
+### GitHub Actions CI
+
+`.github/workflows/ci.yml` 会在每次 push 和 pull request 时自动执行：
+
+* `component-tests`：运行不需要 PostgreSQL 的91个测试
+* `integration-tests`：启动 PostgreSQL 17、执行 Alembic 迁移并运行56个集成测试
+* `docker-build`：确认能够通过 Dockerfile 成功构建 API 镜像
+
 ### 事务设计
 
 数据库版积分转移会在同一个事务中完成以下三项操作：
@@ -698,6 +722,5 @@ Docker镜像会排除无关文件和`.env`，并使用非root用户`appuser`运�
 
 ### 后续计划
 
-* 使用 GitHub Actions 自动运行测试
 * 引入 Redis 缓存
 * 实现认证和权限控制

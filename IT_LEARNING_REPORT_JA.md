@@ -42,6 +42,6 @@
 
 さらに、Docker Composeを使用してFastAPI、PostgreSQL、Alembicマイグレーションをまとめて起動する開発環境を構築しました。PostgreSQLの準備完了後にマイグレーションを適用し、正常終了後にAPIを起動します。データはDocker Volumeに保存されるため、コンテナを再作成しても保持されます。
 
-今後はGitHub Actionsによる自動テスト、Redisによるキャッシュ、認証・認可を追加する予定です。
+また、GitHub Actionsを導入し、pushおよびpull requestのたびに、コンポーネントテスト、PostgreSQL統合テスト、Dockerイメージ構築を自動実行するCIを整備しました。今後はRedisによるキャッシュと認証・認可を追加し、本番環境へのデプロイ方法も整備する予定です。
 
 技術的な詳細、実行方法、テスト方法は[README](README.md)に記載しています。
