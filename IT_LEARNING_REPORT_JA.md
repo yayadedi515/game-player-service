@@ -40,8 +40,8 @@
 
 また、`pydantic-settings`を使用してPostgreSQL接続設定を一元管理し、必須項目と値の範囲を検証した上で、検証済みの設定をキャッシュしています。Alembicによってデータベーススキーマをバージョン管理し、統合テスト開始時には最新のマイグレーションを自動適用します。
 
-さらに、FastAPIアプリケーションをDockerイメージとして構築できるようにしました。不要なファイルや`.env`をイメージから除外し、非rootユーザーでアプリケーションを実行するとともに、`HEALTHCHECK`によってAPIの状態を確認します。
+さらに、Docker Composeを使用してFastAPI、PostgreSQL、Alembicマイグレーションをまとめて起動する開発環境を構築しました。PostgreSQLの準備完了後にマイグレーションを適用し、正常終了後にAPIを起動します。データはDocker Volumeに保存されるため、コンテナを再作成しても保持されます。
 
-今後はPostgreSQLを含むDocker Compose実行環境、GitHub Actionsによる自動テスト、Redisによるキャッシュを追加する予定です。
+今後はGitHub Actionsによる自動テスト、Redisによるキャッシュ、認証・認可を追加する予定です。
 
 技術的な詳細、実行方法、テスト方法は[README](README.md)に記載しています。

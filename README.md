@@ -53,6 +53,7 @@ HTTP → FastAPI → PlayerService → PostgreSQL Repository → Psycopg → Pos
 * HTTPX2
 * Git
 * Docker
+* Docker Compose
 
 ## API
 
@@ -231,6 +232,7 @@ python -m pytest -q
 .
 ├── Dockerfile
 ├── .dockerignore
+├── compose.yaml
 ├── main.py
 ├── app_factory.py
 ├── dependencies.py
@@ -340,41 +342,43 @@ Pydanticを使用して、プレイヤー名の空白除去・文字数制限、
 
 また、すべての成功レスポンスにレスポンスモデルを設定し、FastAPIが返却データを検証するとともに、Swaggerに明確なAPI仕様を表示します。
 
-## DockerによるAPIの実行
+## Docker Composeによる実行
 
-FastAPIアプリケーションのDockerイメージを作成できます。
-
-```powershell
-docker build -t game-player-service:dev .
-```
-
-作成したイメージからコンテナを起動します。
+`compose.yaml`を使用して、FastAPI、PostgreSQL、Alembicマイグレーションをまとめて起動できます。
 
 ```powershell
-docker run --name game-player-service-api -d -p 8000:8000 game-player-service:dev
+docker compose up --build -d
+docker compose ps -a
 ```
 
-起動後、次のURLでヘルスチェックとSwagger UIを確認できます。
+起動時には、最初にPostgreSQLのヘルスチェックを待ちます。次にマイグレーション用コンテナが`alembic upgrade head`を実行し、正常終了した後にFastAPIコンテナを起動します。マイグレーション用コンテナの`Exited (0)`は正常終了を表します。
 
-```text
-http://localhost:8000/health
-http://localhost:8000/docs
+起動後、次のURLを確認できます。
+
+* ヘルスチェック：`http://localhost:8000/health`
+* Swagger UI：`http://localhost:8000/docs`
+
+FastAPIとマイグレーション用コンテナは、実行時に`.env`からデータベース設定を受け取ります。コンテナ内の`DB_HOST`はComposeのサービス名である`db`に上書きされます。PostgreSQLのポートはホストへ公開せず、Compose内部のネットワークからのみ接続します。
+
+PostgreSQLのデータは`postgres_data`というDocker Volumeに保存されるため、次のコマンドでコンテナを削除してもデータは保持されます。
+
+```powershell
+docker compose down
 ```
 
-DockerイメージにはPython、依存パッケージ、アプリケーションコード、起動コマンドが含まれます。実際の`.env`はイメージに含めず、設定値はコンテナ実行時に外部から渡します。また、アプリケーションはrootではなく`appuser`で実行し、Dockerの`HEALTHCHECK`で`/health`を定期的に確認します。
+`docker compose down -v`を実行するとVolumeとデータも削除されるため、必要なデータがある場合は使用しないでください。
 
-現在の単一コンテナ構成でプレイヤー関連APIを利用するには、実行時にデータベース環境変数を渡し、コンテナからPostgreSQLへ接続できる必要があります。PostgreSQLを含む実行環境はDocker Composeで追加する予定です。
+Dockerイメージでは不要なファイルと`.env`を除外し、アプリケーションを非rootユーザーの`appuser`で実行します。また、Dockerの`HEALTHCHECK`で`/health`を定期的に確認します。
 
 ## 現在の制約
 
 * 認証・認可は未実装です。
 * Redisなどのキャッシュは未導入です。
-* FastAPIのDockerイメージ化は完了していますが、PostgreSQLを含むDocker Compose構成と本番環境へのデプロイは未実装です。
+* Docker Composeによる開発用実行環境は構築済みですが、本番環境へのデプロイは未実装です。
 * 本プロジェクトは開発中のポートフォリオであり、本番運用を目的とした完成済みシステムではありません。
 
 ## 今後の予定
 
-* Docker Composeによる実行環境の構築
 * GitHub Actionsによる自動テスト
 * Redisによるキャッシュの導入
 * 認証・認可の実装
@@ -441,6 +445,7 @@ HTTP → FastAPI → PlayerService → PostgreSQL Repository → Psycopg → Pos
 * HTTPX2
 * Git
 * Docker
+* Docker Compose
 
 ### 当前 API
 
@@ -656,41 +661,43 @@ FastAPI endpoint 不再直接调用 Repository，而是通过 PlayerService 执�
 * 数据库更新途中发生异常
 * 事务整体回滚
 
-### 使用 Docker 运行 API
+### 使用 Docker Compose 运行
 
-可以通过Dockerfile构建FastAPI应用镜像：
-
-```powershell
-docker build -t game-player-service:dev .
-```
-
-使用构建好的镜像启动容器：
+通过`compose.yaml`可以统一启动FastAPI、PostgreSQL和Alembic迁移服务。
 
 ```powershell
-docker run --name game-player-service-api -d -p 8000:8000 game-player-service:dev
+docker compose up --build -d
+docker compose ps -a
 ```
+
+启动时会先等待PostgreSQL通过健康检查，然后由迁移容器执行`alembic upgrade head`。迁移成功结束后，FastAPI容器才会启动。迁移容器显示`Exited (0)`代表正常完成，并不是故障。
 
 启动后可以访问：
 
-```text
-http://localhost:8000/health
-http://localhost:8000/docs
+* 健康检查：`http://localhost:8000/health`
+* Swagger UI：`http://localhost:8000/docs`
+
+FastAPI和迁移容器会在运行时读取`.env`中的数据库配置，并将容器内的`DB_HOST`覆盖为Compose服务名`db`。PostgreSQL端口不会发布到宿主机，只允许Compose内部网络中的服务访问。
+
+PostgreSQL数据保存在名为`postgres_data`的Docker Volume中，因此执行下面的命令删除容器后，数据仍然保留：
+
+```powershell
+docker compose down
 ```
 
-Docker镜像包含Python、依赖包、应用代码和启动命令。真实`.env`不会进入镜像，配置值需要在容器运行时从外部传入。应用使用非root用户`appuser`运行，并通过Docker的`HEALTHCHECK`定期检查`/health`。
+`docker compose down -v`会同时删除Volume和数据库数据，存在需要保留的数据时不要使用。
 
-在当前单容器结构下，玩家相关API还需要在运行时传入数据库环境变量，并确保容器能够连接PostgreSQL。包含PostgreSQL的完整运行环境将在Docker Compose中实现。
+Docker镜像会排除无关文件和`.env`，并使用非root用户`appuser`运行应用。Docker的`HEALTHCHECK`会定期访问`/health`检查API状态。
 
 ### 当前限制
 
 * 尚未实现认证和权限控制
 * 尚未引入 Redis 等缓存
-* 已完成FastAPI镜像构建，但尚未完成包含PostgreSQL的Docker Compose环境及线上部署
+* 已完成Docker Compose开发环境，但尚未完成线上部署
 * 当前是持续开发中的作品集项目，不能视为已经完成的生产级系统
 
 ### 后续计划
 
-* 使用 Docker Compose 构建运行环境
 * 使用 GitHub Actions 自动运行测试
 * 引入 Redis 缓存
 * 实现认证和权限控制
