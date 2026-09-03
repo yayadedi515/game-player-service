@@ -36,18 +36,9 @@ def get_player(
 def get_ranking(
     service=Depends(get_player_service)
 ):
-    players = service.get_ranking()
-
-    ranking = [
-        {
-            "name": player["name"],
-            "score": player["score"]
-        }
-        for player in players
-    ]
 
     return {
-        "ranking": ranking
+        "ranking": service.get_ranking()
     }
 
 

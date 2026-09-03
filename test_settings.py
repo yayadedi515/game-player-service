@@ -4,7 +4,7 @@ from functools import lru_cache
 import pytest
 from pydantic import ValidationError
 
-def test_settings_reads_database_environment(
+def test_settings_reads_application_environment(
         monkeypatch
 ):
     monkeypatch.setenv("DB_HOST", "database")
@@ -15,6 +15,12 @@ def test_settings_reads_database_environment(
     )
     monkeypatch.setenv("DB_USER", "postgres")
     monkeypatch.setenv("DB_PASSWORD", "secret")
+    monkeypatch.setenv("REDIS_HOST", "cache")
+    monkeypatch.setenv("REDIS_PORT", "6379")
+    monkeypatch.setenv(
+        "RANKING_CACHE_TTL_SECONDS",
+        "60"
+    )
 
     settings = Settings(_env_file=None)
 
@@ -30,6 +36,10 @@ def test_settings_reads_database_environment(
         settings.db_password.get_secret_value()
         == "secret"
     )
+    assert settings.redis_host == "cache"
+    assert settings.redis_port == 6379
+    assert isinstance(settings.redis_port, int)
+    assert settings.ranking_cache_ttl_seconds == 60
 
 
 @pytest.mark.parametrize(

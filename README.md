@@ -59,6 +59,8 @@ HTTP → FastAPI → PlayerService → PostgreSQL Repository → Psycopg → Pos
 * Docker
 * GitHub Actions
 * Docker Compose
+* Redis
+* redis-py
 
 ## API
 
@@ -202,10 +204,10 @@ python -m pytest -m "not integration" -q
 実行結果：
 
 ```text
-91 passed
+98 passed
 ```
 
-PostgreSQL Repository・API統合テスト：
+PostgreSQL・Redisを使用するRepository・API統合テスト：
 
 ```bash
 python -m pytest -m integration -q
@@ -226,7 +228,7 @@ python -m pytest -q
 現在の実行結果：
 
 ```text
-146 passed
+154 passed
 ```
 
 統合テストには、意図的にPostgreSQLの整数上限超過を発生させるテストが含まれています。スコアの加算処理が途中で失敗した場合でも、送信者の減算、受信者の加算、移動履歴の追加がすべてロールバックされることを確認しています。
@@ -235,7 +237,7 @@ python -m pytest -q
 
 `.github/workflows/ci.yml`により、pushおよびpull requestのたびに次の処理を自動実行します。
 
-* `component-tests`：PostgreSQLを使用しない91件のテスト
+* `component-tests`：PostgreSQLを使用しない98件のテスト
 * `integration-tests`：PostgreSQL 17の起動、Alembicマイグレーション、56件の統合テスト
 * `docker-build`：DockerfileからAPIイメージを構築できることの確認
 
@@ -265,6 +267,8 @@ python -m pytest -q
 ├── player_repository.py
 ├── exception_handlers.py
 ├── settings.py
+├── ranking_cache.py
+├── ranking_cache_protocol.py
 ├── database.py
 ├── alembic.ini
 ├── migrations/
@@ -286,6 +290,7 @@ python -m pytest -q
 ├── test_settings.py
 ├── test_database.py
 ├── test_migrations.py
+├── test_ranking_cache.py
 ├── conftest.py
 ├── pytest.ini
 ├── requirements.txt
@@ -360,14 +365,14 @@ Pydanticを使用して、プレイヤー名の空白除去・文字数制限、
 
 ## Docker Composeによる実行
 
-`compose.yaml`を使用して、FastAPI、PostgreSQL、Alembicマイグレーションをまとめて起動できます。
+`compose.yaml`を使用して、FastAPI、PostgreSQL、Redis、Alembicマイグレーションをまとめて起動できます。
 
 ```powershell
 docker compose up --build -d
 docker compose ps -a
 ```
 
-起動時には、最初にPostgreSQLのヘルスチェックを待ちます。次にマイグレーション用コンテナが`alembic upgrade head`を実行し、正常終了した後にFastAPIコンテナを起動します。マイグレーション用コンテナの`Exited (0)`は正常終了を表します。
+起動時にはPostgreSQLとRedisのヘルスチェックを待ちます。次にマイグレーション用コンテナが`alembic upgrade head`を実行し、正常終了した後にFastAPIコンテナを起動します。マイグレーション用コンテナの`Exited (0)`は正常終了を表します。
 
 起動後、次のURLを確認できます。
 
@@ -389,13 +394,13 @@ Dockerイメージでは不要なファイルと`.env`を除外し、アプリ�
 ## 現在の制約
 
 * 認証・認可は未実装です。
-* Redisなどのキャッシュは未導入です。
+* ランキングのRedis読み取りキャッシュは実装済みですが、データ更新時のキャッシュ無効化とRedis障害時のフォールバックは未実装です。
 * Docker Composeによる開発用実行環境は構築済みですが、本番環境へのデプロイは未実装です。
 * 本プロジェクトは開発中のポートフォリオであり、本番運用を目的とした完成済みシステムではありません。
 
 ## 今後の予定
 
-* Redisによるキャッシュの導入
+* Redisキャッシュの無効化と障害時フォールバックの実装
 * 認証・認可の実装
 
 
@@ -462,6 +467,8 @@ HTTP → FastAPI → PlayerService → PostgreSQL Repository → Psycopg → Pos
 * Docker
 * GitHub Actions
 * Docker Compose
+* Redis
+* redis-py
 
 ### 当前 API
 
@@ -581,10 +588,10 @@ python -m pytest -m "not integration" -q
 当前结果：
 
 ```text
-91 passed
+98 passed
 ```
 
-PostgreSQL Repository 与 API 集成测试：
+使用 PostgreSQL 与 Redis 的 Repository/API 集成测试：
 
 ```bash
 python -m pytest -m integration -q
@@ -605,14 +612,14 @@ python -m pytest -q
 当前结果：
 
 ```text
-146 passed
+154 passed
 ```
 
 ### GitHub Actions CI
 
 `.github/workflows/ci.yml` 会在每次 push 和 pull request 时自动执行：
 
-* `component-tests`：运行不需要 PostgreSQL 的91个测试
+* `component-tests`：运行不需要 PostgreSQL 的98个测试
 * `integration-tests`：启动 PostgreSQL 17、执行 Alembic 迁移并运行56个集成测试
 * `docker-build`：确认能够通过 Dockerfile 成功构建 API 镜像
 
@@ -687,15 +694,14 @@ FastAPI endpoint 不再直接调用 Repository，而是通过 PlayerService 执�
 
 ### 使用 Docker Compose 运行
 
-通过`compose.yaml`可以统一启动FastAPI、PostgreSQL和Alembic迁移服务。
+通过`compose.yaml`可以统一启动FastAPI、PostgreSQL、Redis和Alembic迁移服务。
 
 ```powershell
 docker compose up --build -d
 docker compose ps -a
 ```
 
-启动时会先等待PostgreSQL通过健康检查，然后由迁移容器执行`alembic upgrade head`。迁移成功结束后，FastAPI容器才会启动。迁移容器显示`Exited (0)`代表正常完成，并不是故障。
-
+启动时会等待PostgreSQL和Redis通过健康检查，然后由迁移容器执行`alembic upgrade head`。迁移成功结束后，FastAPI容器才会启动。迁移容器显示`Exited (0)`代表正常完成，并不是故障。
 启动后可以访问：
 
 * 健康检查：`http://localhost:8000/health`
@@ -716,11 +722,11 @@ Docker镜像会排除无关文件和`.env`，并使用非root用户`appuser`运�
 ### 当前限制
 
 * 尚未实现认证和权限控制
-* 尚未引入 Redis 等缓存
+* 已实现排行榜的Redis读取缓存，但尚未实现数据更新时的缓存失效和Redis故障时的降级处理
 * 已完成Docker Compose开发环境，但尚未完成线上部署
 * 当前是持续开发中的作品集项目，不能视为已经完成的生产级系统
 
 ### 后续计划
 
-* 引入 Redis 缓存
+* 实现Redis缓存失效与故障降级
 * 实现认证和权限控制

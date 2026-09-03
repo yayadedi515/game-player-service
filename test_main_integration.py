@@ -7,7 +7,10 @@ from transfer_result import TransferResult
 
 pytestmark = [
     pytest.mark.integration,
-    pytest.mark.usefixtures("reset_test_database")
+    pytest.mark.usefixtures(
+        "reset_test_database",
+        "reset_ranking_cache"
+    )
 ]
 
 client = TestClient(app)

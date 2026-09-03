@@ -129,6 +129,19 @@ class FakeRepository:
             }
         ]
 
+
+class FakeRankingCache:
+    def __init__(self):
+        self.ranking = None
+        self.stored_ranking = None
+
+    def get_ranking(self):
+        return self.ranking
+
+    def set_ranking(self, ranking):
+        self.stored_ranking = ranking
+
+
 def test_get_player_uses_repository():
     repository = FakeRepository()
     service = PlayerService(repository)
@@ -161,7 +174,12 @@ def test_get_ranking_uses_repository():
     ranking = service.get_ranking()
 
     assert repository.ranking_requested is True
-    assert ranking[0]["name"] == "Alice"
+    assert ranking == [
+        {
+            "name": "Alice",
+            "score": 120
+        }
+    ]
 
 
 def test_add_score_uses_repository():
@@ -323,3 +341,48 @@ def test_fake_repository_satisfies_repository_protocol():
         repository,
         PlayerRepositoryProtocol
     )
+
+
+def test_get_ranking_returns_cache_without_using_repository():
+    repository = FakeRepository()
+    cache = FakeRankingCache()
+    cache.ranking = [
+        {
+            "name": "Cached Alice",
+            "score": 999
+        }
+    ]
+    service = PlayerService(
+        repository,
+        ranking_cache=cache
+    )
+
+    ranking = service.get_ranking()
+
+    assert ranking == [
+        {
+            "name": "Cached Alice",
+            "score": 999
+        }
+    ]
+    assert repository.ranking_requested is False
+
+
+def test_get_ranking_stores_repository_result_in_cache():
+    repository = FakeRepository()
+    cache = FakeRankingCache()
+    service = PlayerService(
+        repository,
+        ranking_cache=cache
+    )
+
+    ranking = service.get_ranking()
+
+    assert repository.ranking_requested is True
+    assert ranking == [
+        {
+            "name": "Alice",
+            "score": 120
+        }
+    ]
+    assert cache.stored_ranking == ranking

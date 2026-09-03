@@ -2,12 +2,15 @@ import pytest
 
 from database import get_connection
 from settings import get_settings
+from redis import Redis
 
 
 from pathlib import Path
 
+
 from alembic import command
 from alembic.config import Config
+from ranking_cache import RedisRankingCache
 
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -81,3 +84,25 @@ def reset_test_database(
                 )
     finally:
         get_settings.cache_clear()
+
+
+@pytest.fixture
+def reset_ranking_cache():
+    settings = get_settings()
+    redis_client = Redis(
+        host=settings.redis_host,
+        port=settings.redis_port,
+        decode_responses=True
+    )
+
+    redis_client.delete(
+        RedisRankingCache.CACHE_KEY
+    )
+
+    try:
+        yield
+    finally:
+        redis_client.delete(
+            RedisRankingCache.CACHE_KEY
+        )
+        redis_client.close()

@@ -4,6 +4,7 @@ from psycopg.errors import (
 )
 
 from transfer_result import TransferResult
+from ranking_cache_protocol import RankingCacheProtocol
 from player_repository_protocol import PlayerRepositoryProtocol
 from player_exceptions import (
     InsufficientScoreError,
@@ -18,9 +19,11 @@ from player_exceptions import (
 class PlayerService:
     def __init__(
             self,
-            repository: PlayerRepositoryProtocol
+            repository: PlayerRepositoryProtocol,
+            ranking_cache: RankingCacheProtocol | None = None
     ):
         self.repository = repository
+        self.ranking_cache = ranking_cache
 
     def get_player(self, name):
         player = self.repository.find_player_by_name(name)
@@ -39,7 +42,28 @@ class PlayerService:
         return player
 
     def get_ranking(self):
-        return self.repository.get_ranking()
+        if self.ranking_cache is not None:
+            cached_ranking = (
+                self.ranking_cache.get_ranking()
+            )
+
+            if cached_ranking is not None:
+                return cached_ranking
+
+        players = self.repository.get_ranking()
+
+        ranking = [
+            {
+                "name": player["name"],
+                "score": player["score"]
+            }
+            for player in players
+        ]
+
+        if self.ranking_cache is not None:
+            self.ranking_cache.set_ranking(ranking)
+
+        return ranking
 
     def add_score(self, name, points):
         player = self.repository.add_score(name, points)
