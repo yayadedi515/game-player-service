@@ -13,6 +13,7 @@ class FakeSettings:
     redis_host = "cache"
     redis_port = 6380
     ranking_cache_ttl_seconds = 120
+    redis_timeout_seconds = 0.5
 
 
 def test_get_player_repository_returns_player_repository():
@@ -52,6 +53,18 @@ def test_get_redis_client_uses_provided_settings():
     assert (
         connection_settings["decode_responses"]
         is True
+    )
+    assert (
+            connection_settings["socket_connect_timeout"]
+            == 0.5
+    )
+    assert (
+            connection_settings["socket_timeout"]
+            == 0.5
+    )
+    assert (
+            connection_settings["retry"].get_retries()
+            == 0
     )
 
 

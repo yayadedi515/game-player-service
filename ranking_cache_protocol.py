@@ -10,3 +10,6 @@ class RankingCacheProtocol(Protocol):
             ranking: list[dict]
     ) -> None:
         ...
+
+    def invalidate_ranking(self) -> None:
+        ...

@@ -134,12 +134,16 @@ class FakeRankingCache:
     def __init__(self):
         self.ranking = None
         self.stored_ranking = None
+        self.invalidated = False
 
     def get_ranking(self):
         return self.ranking
 
     def set_ranking(self, ranking):
         self.stored_ranking = ranking
+
+    def invalidate_ranking(self):
+        self.invalidated = True
 
 
 def test_get_player_uses_repository():
@@ -193,6 +197,19 @@ def test_add_score_uses_repository():
         30
     )
     assert player["score"] == 150
+
+
+def test_add_score_invalidates_ranking_cache():
+    repository = FakeRepository()
+    ranking_cache = FakeRankingCache()
+    service = PlayerService(
+        repository,
+        ranking_cache=ranking_cache
+    )
+
+    service.add_score("Alice", 30)
+
+    assert ranking_cache.invalidated is True
 
 
 def test_delete_player_uses_repository():
@@ -386,3 +403,67 @@ def test_get_ranking_stores_repository_result_in_cache():
         }
     ]
     assert cache.stored_ranking == ranking
+
+
+def test_create_player_invalidates_ranking_cache():
+    repository = FakeRepository()
+    ranking_cache = FakeRankingCache()
+    service = PlayerService(
+        repository,
+        ranking_cache=ranking_cache
+    )
+
+    service.create_player("Diana")
+
+    assert ranking_cache.invalidated is True
+
+
+def test_delete_player_invalidates_ranking_cache():
+    repository = FakeRepository()
+    ranking_cache = FakeRankingCache()
+    service = PlayerService(
+        repository,
+        ranking_cache=ranking_cache
+    )
+
+    service.delete_player("Alice")
+
+    assert ranking_cache.invalidated is True
+
+
+def test_transfer_score_invalidates_ranking_cache():
+    repository = FakeRepository()
+    ranking_cache = FakeRankingCache()
+    service = PlayerService(
+        repository,
+        ranking_cache=ranking_cache
+    )
+
+    service.transfer_score(
+        "Alice",
+        "Bob",
+        30
+    )
+
+    assert ranking_cache.invalidated is True
+
+
+def test_failed_transfer_does_not_invalidate_ranking_cache():
+    repository = FakeRepository()
+    repository.transfer_result = (
+        TransferResult.INSUFFICIENT_SCORE
+    )
+    ranking_cache = FakeRankingCache()
+    service = PlayerService(
+        repository,
+        ranking_cache=ranking_cache
+    )
+
+    with pytest.raises(InsufficientScoreError):
+        service.transfer_score(
+            "Alice",
+            "Bob",
+            30
+        )
+
+    assert ranking_cache.invalidated is False

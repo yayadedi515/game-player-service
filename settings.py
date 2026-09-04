@@ -34,6 +34,11 @@ class Settings(BaseSettings):
         ge=1,
         le=3600
     )
+    redis_timeout_seconds: float = Field(
+        default=0.5,
+        gt=0,
+        le=10
+    )
 
     model_config = SettingsConfigDict(
         env_file=BASE_DIR / ".env",

@@ -39,6 +39,9 @@ class PlayerService:
         if player is None:
             raise DuplicatePlayerError
 
+        if self.ranking_cache is not None:
+            self.ranking_cache.invalidate_ranking()
+
         return player
 
     def get_ranking(self):
@@ -71,19 +74,25 @@ class PlayerService:
         if player is None:
             raise PlayerNotFoundError
 
+        if self.ranking_cache is not None:
+            self.ranking_cache.invalidate_ranking()
+
         return player
 
     def delete_player(self, name):
         try:
             player = self.repository.delete_player(name)
         except (
-            ForeignKeyViolation,
-            RestrictViolation
+                ForeignKeyViolation,
+                RestrictViolation
         ) as error:
             raise PlayerDeletionRestrictedError from error
 
         if player is None:
             raise PlayerNotFoundError
+
+        if self.ranking_cache is not None:
+            self.ranking_cache.invalidate_ranking()
 
         return player
 
@@ -103,6 +112,9 @@ class PlayerService:
         )
 
         if result is TransferResult.SUCCESS:
+            if self.ranking_cache is not None:
+                self.ranking_cache.invalidate_ranking()
+
             return {
                 "sender": cleaned_sender,
                 "receiver": cleaned_receiver,

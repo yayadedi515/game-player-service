@@ -1,5 +1,7 @@
 import json
 
+from redis.exceptions import RedisError
+
 
 class RedisRankingCache:
     CACHE_KEY = "ranking"
@@ -13,21 +15,38 @@ class RedisRankingCache:
         self.ttl_seconds = ttl_seconds
 
     def get_ranking(self) -> list[dict] | None:
-        cached_ranking = self.redis_client.get(
-            self.CACHE_KEY
-        )
+        try:
+            cached_ranking = self.redis_client.get(
+                self.CACHE_KEY
+            )
 
-        if cached_ranking is None:
+            if cached_ranking is None:
+                return None
+
+            return json.loads(cached_ranking)
+        except (
+                RedisError,
+                json.JSONDecodeError
+        ):
             return None
-
-        return json.loads(cached_ranking)
 
     def set_ranking(
             self,
             ranking: list[dict]
     ) -> None:
-        self.redis_client.set(
-            self.CACHE_KEY,
-            json.dumps(ranking),
-            ex=self.ttl_seconds
-        )
+        try:
+            self.redis_client.set(
+                self.CACHE_KEY,
+                json.dumps(ranking),
+                ex=self.ttl_seconds
+            )
+        except RedisError:
+            return None
+
+    def invalidate_ranking(self) -> None:
+        try:
+            self.redis_client.delete(
+                self.CACHE_KEY
+            )
+        except RedisError:
+            return None

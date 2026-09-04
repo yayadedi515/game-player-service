@@ -299,3 +299,36 @@ def test_get_transfer_history_pagination_from_postgresql():
     assert history[0]["receiver"] == "Alice"
     assert history[0]["points"] == 10
     assert history[0]["created_at"] is not None
+
+
+def test_score_update_invalidates_cached_ranking():
+    first_response = client.get("/ranking")
+
+    assert first_response.status_code == 200
+    assert first_response.json() == {
+        "ranking": [
+            {
+                "name": "Alice",
+                "score": 90
+            }
+        ]
+    }
+
+    update_response = client.patch(
+        "/players/Alice/score",
+        json={"points": 30}
+    )
+
+    assert update_response.status_code == 200
+
+    second_response = client.get("/ranking")
+
+    assert second_response.status_code == 200
+    assert second_response.json() == {
+        "ranking": [
+            {
+                "name": "Alice",
+                "score": 120
+            }
+        ]
+    }

@@ -204,7 +204,7 @@ python -m pytest -m "not integration" -q
 実行結果：
 
 ```text
-98 passed
+108 passed
 ```
 
 PostgreSQL・Redisを使用するRepository・API統合テスト：
@@ -216,7 +216,7 @@ python -m pytest -m integration -q
 実行結果：
 
 ```text
-56 passed
+57 passed
 ```
 
 全テスト：
@@ -228,7 +228,7 @@ python -m pytest -q
 現在の実行結果：
 
 ```text
-154 passed
+165 passed
 ```
 
 統合テストには、意図的にPostgreSQLの整数上限超過を発生させるテストが含まれています。スコアの加算処理が途中で失敗した場合でも、送信者の減算、受信者の加算、移動履歴の追加がすべてロールバックされることを確認しています。
@@ -237,8 +237,8 @@ python -m pytest -q
 
 `.github/workflows/ci.yml`により、pushおよびpull requestのたびに次の処理を自動実行します。
 
-* `component-tests`：PostgreSQLを使用しない98件のテスト
-* `integration-tests`：PostgreSQL 17の起動、Alembicマイグレーション、56件の統合テスト
+* `component-tests`：PostgreSQLを使用しない108件のテスト
+* `integration-tests`：PostgreSQL 17の起動、Alembicマイグレーション、57件の統合テスト
 * `docker-build`：DockerfileからAPIイメージを構築できることの確認
 
 ## プロジェクト構成
@@ -331,8 +331,7 @@ Alembicを使用して、PostgreSQLのテーブル構造をバージョン管理
 
 ### 環境設定の一元管理
 
-`pydantic-settings`を使用して、PostgreSQLの接続設定を環境変数または`.env`から読み込み、必須項目とポート番号の範囲を検証しています。`DB_PASSWORD`は`SecretStr`で通常の表示時にマスクし、`get_settings()`によって検証済みの設定をキャッシュします。テストではキャッシュを明示的にクリアし、テスト用データベースの設定を分離しています。
-
+`pydantic-settings`を使用して、PostgreSQLとRedisの接続設定を環境変数または`.env`から読み込み、必須項目とポート番号の範囲を検証しています。`DB_PASSWORD`は`SecretStr`で通常の表示時にマスクし、`get_settings()`によって検証済みの設定をキャッシュします。Redisには0.5秒の接続・読み書きタイムアウトを設定し、キャッシュ障害時に早くPostgreSQLへ切り替えられるようにしています。
 ### 同時更新への対応
 
 対象プレイヤーを`SELECT ... FOR UPDATE`でロックします。また、`player_id`順にロックを取得することで、異なるトランザクション間のデッドロックリスクを低減しています。
@@ -356,6 +355,12 @@ Alembicを使用して、PostgreSQLのテーブル構造をバージョン管理
 * SQLインジェクション形式の入力
 * 同点ランキング
 * トランザクション途中のデータベース例外
+
+### Redisランキングキャッシュ
+
+ランキング取得では、最初にRedisを確認し、キャッシュがない場合だけPostgreSQLから取得して60秒間保存します。プレイヤーの作成・削除・スコア追加・スコア移動が成功した場合は、古くなったランキングキャッシュを削除します。
+
+Redisへの接続、読み取り、書き込み、削除に失敗した場合や、キャッシュされたJSONが不正な場合でも、PostgreSQLの処理を継続します。Redisクライアントの自動再試行は無効にし、キャッシュ障害によってAPIが長時間待機しないようにしています。
 
 ### APIの入力・出力契約
 
@@ -394,15 +399,13 @@ Dockerイメージでは不要なファイルと`.env`を除外し、アプリ�
 ## 現在の制約
 
 * 認証・認可は未実装です。
-* ランキングのRedis読み取りキャッシュは実装済みですが、データ更新時のキャッシュ無効化とRedis障害時のフォールバックは未実装です。
 * Docker Composeによる開発用実行環境は構築済みですが、本番環境へのデプロイは未実装です。
 * 本プロジェクトは開発中のポートフォリオであり、本番運用を目的とした完成済みシステムではありません。
 
 ## 今後の予定
 
-* Redisキャッシュの無効化と障害時フォールバックの実装
 * 認証・認可の実装
-
+* 本番環境へのデプロイ方法の整備
 
 
 ---
@@ -588,7 +591,7 @@ python -m pytest -m "not integration" -q
 当前结果：
 
 ```text
-98 passed
+108 passed
 ```
 
 使用 PostgreSQL 与 Redis 的 Repository/API 集成测试：
@@ -600,7 +603,7 @@ python -m pytest -m integration -q
 当前结果：
 
 ```text
-56 passed
+57 passed
 ```
 
 执行全部测试：
@@ -612,15 +615,15 @@ python -m pytest -q
 当前结果：
 
 ```text
-154 passed
+165 passed
 ```
 
 ### GitHub Actions CI
 
 `.github/workflows/ci.yml` 会在每次 push 和 pull request 时自动执行：
 
-* `component-tests`：运行不需要 PostgreSQL 的98个测试
-* `integration-tests`：启动 PostgreSQL 17、执行 Alembic 迁移并运行56个集成测试
+* `component-tests`：运行不需要 PostgreSQL 的108个测试
+* `integration-tests`：启动 PostgreSQL 17、执行 Alembic 迁移并运行57个集成测试
 * `docker-build`：确认能够通过 Dockerfile 成功构建 API 镜像
 
 ### 事务设计
@@ -653,7 +656,7 @@ python -m pytest -q
 
 ### 集中管理环境配置
 
-项目使用 `pydantic-settings` 从环境变量或 `.env` 读取 PostgreSQL 连接配置，并验证必填项和端口范围。`DB_PASSWORD` 使用 `SecretStr` 在普通输出中隐藏密码，`get_settings()` 会缓存已经验证的配置。测试会显式清除缓存，以隔离测试数据库配置。
+项目使用 `pydantic-settings` 从环境变量或 `.env` 读取 PostgreSQL 与 Redis 的连接配置，并验证必填项和端口范围。`DB_PASSWORD` 使用 `SecretStr` 在普通输出中隐藏密码，`get_settings()` 会缓存已经验证的配置。Redis 设置了0.5秒的连接与读写超时，以便缓存故障时尽快切换到 PostgreSQL。
 
 ### 数据库迁移
 
@@ -669,6 +672,12 @@ FastAPI endpoint 不再直接调用 Repository，而是通过 PlayerService 执�
 
 `app_factory.py` 中的 `create_app()` 负责创建 FastAPI 应用，`main.py` 只公开供 Uvicorn 启动的 `app`。`routers/health.py`、`routers/players.py` 和 `routers/transfers.py` 分别负责相关接口，`dependencies.py` 在正常运行时创建 PlayerRepository 和 PlayerService。各 Router 也配置了 Swagger 中的接口分组。
 各 Router 只处理成功流程，PlayerService 抛出的业务异常统一由 `exception_handlers.py` 转换为 HTTP 响应。
+
+### Redis 排行榜缓存
+
+查询排行榜时会先检查 Redis，只有缓存不存在时才从 PostgreSQL 获取数据，并保存60秒。创建或删除玩家、增加积分、转移积分成功后，会删除已经过期的排行榜缓存。
+
+Redis 连接、读取、写入或删除失败，以及缓存中的 JSON 无效时，系统仍会继续使用 PostgreSQL。Redis 客户端的自动重试已关闭，避免缓存故障导致 API 长时间等待。
 
 ### API 输入与输出契约
 
@@ -722,11 +731,10 @@ Docker镜像会排除无关文件和`.env`，并使用非root用户`appuser`运�
 ### 当前限制
 
 * 尚未实现认证和权限控制
-* 已实现排行榜的Redis读取缓存，但尚未实现数据更新时的缓存失效和Redis故障时的降级处理
 * 已完成Docker Compose开发环境，但尚未完成线上部署
 * 当前是持续开发中的作品集项目，不能视为已经完成的生产级系统
 
 ### 后续计划
 
-* 实现Redis缓存失效与故障降级
 * 实现认证和权限控制
+* 完善线上部署方案

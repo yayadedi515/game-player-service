@@ -21,6 +21,10 @@ def test_settings_reads_application_environment(
         "RANKING_CACHE_TTL_SECONDS",
         "60"
     )
+    monkeypatch.setenv(
+        "REDIS_TIMEOUT_SECONDS",
+        "0.5"
+    )
 
     settings = Settings(_env_file=None)
 
@@ -40,6 +44,11 @@ def test_settings_reads_application_environment(
     assert settings.redis_port == 6379
     assert isinstance(settings.redis_port, int)
     assert settings.ranking_cache_ttl_seconds == 60
+    assert settings.redis_timeout_seconds == 0.5
+    assert isinstance(
+        settings.redis_timeout_seconds,
+        float
+    )
 
 
 @pytest.mark.parametrize(

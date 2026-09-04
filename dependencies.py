@@ -1,5 +1,8 @@
 from fastapi import Depends
+
 from redis import Redis
+from redis.backoff import NoBackoff
+from redis.retry import Retry
 
 from settings import get_settings
 from player_repository import PlayerRepository
@@ -7,17 +10,26 @@ from player_service import PlayerService
 from ranking_cache import RedisRankingCache
 
 
+
 def get_player_repository():
     return PlayerRepository()
 
 
-def get_redis_client(
-        settings=Depends(get_settings)
-):
+def get_redis_client(settings=Depends(get_settings)):
     return Redis(
         host=settings.redis_host,
         port=settings.redis_port,
-        decode_responses=True
+        decode_responses=True,
+        socket_connect_timeout=(
+            settings.redis_timeout_seconds
+        ),
+        socket_timeout=(
+            settings.redis_timeout_seconds
+        ),
+        retry=Retry(
+            NoBackoff(),
+            0
+        )
     )
 
 
