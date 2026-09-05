@@ -183,3 +183,29 @@ def test_environment_variable_overrides_env_file(
 
     assert settings.db_host == "file-database"
     assert settings.db_name == "from_environment"
+
+
+def test_settings_reads_jwt_configuration(
+        monkeypatch
+):
+    monkeypatch.setenv("DB_HOST", "database")
+    monkeypatch.setenv("DB_PORT", "5432")
+    monkeypatch.setenv("DB_NAME", "test_database")
+    monkeypatch.setenv("DB_USER", "postgres")
+    monkeypatch.setenv("DB_PASSWORD", "secret")
+    monkeypatch.setenv(
+        "JWT_SECRET_KEY",
+        "test-only-jwt-secret-key-123456789"
+    )
+    monkeypatch.setenv(
+        "ACCESS_TOKEN_EXPIRE_MINUTES",
+        "45"
+    )
+
+    settings = Settings(_env_file=None)
+
+    assert (
+        settings.jwt_secret_key.get_secret_value()
+        == "test-only-jwt-secret-key-123456789"
+    )
+    assert settings.access_token_expire_minutes == 45

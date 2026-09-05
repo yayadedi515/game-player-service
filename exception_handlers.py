@@ -10,7 +10,11 @@ from player_exceptions import (
     PlayerNotFoundError,
     UnexpectedTransferResultError
 )
-from user_exceptions import DuplicateUserError
+from user_exceptions import (
+    DuplicateUserError,
+    InvalidAccessTokenError,
+    InvalidCredentialsError
+)
 
 
 BUSINESS_ERROR_RESPONSES = {
@@ -42,6 +46,14 @@ BUSINESS_ERROR_RESPONSES = {
         500,
         "Unexpected transfer result"
     ),
+    InvalidCredentialsError: (
+        401,
+        "Invalid username or password"
+    ),
+    InvalidAccessTokenError: (
+        401,
+        "Could not validate credentials"
+    ),
 }
 
 
@@ -56,6 +68,13 @@ async def handle_business_error(
         type(error)
     ]
 
+    headers = None
+
+    if status_code == 401:
+        headers = {
+            "WWW-Authenticate": "Bearer"
+        }
+
     if status_code >= 500:
         logger.error(
             "Unexpected business error on %s %s: %s",
@@ -69,7 +88,8 @@ async def handle_business_error(
         status_code=status_code,
         content={
             "detail": detail
-        }
+        },
+        headers=headers
     )
 
 

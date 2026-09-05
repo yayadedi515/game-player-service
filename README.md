@@ -63,6 +63,8 @@ HTTP → FastAPI → PlayerService → PostgreSQL Repository → Psycopg → Pos
 * redis-py
 * pwdlib
 * Argon2
+* PyJWT
+* pwdlib / Argon2
 
 ## API
 
@@ -79,6 +81,7 @@ HTTP → FastAPI → PlayerService → PostgreSQL Repository → Psycopg → Pos
 | `POST`   | `/transfers`             | スコアの移動 |
 | `GET`    | `/transfers`             | 移動履歴の取得（ページング対応） |
 | `POST` | `/auth/register` | ログインユーザーの登録 |
+| `POST` | `/auth/token` | ログインとJWTアクセストークンの発行 |
 
 プレイヤー作成リクエストの例：
 
@@ -207,7 +210,7 @@ python -m pytest -m "not integration" -q
 実行結果：
 
 ```text
-125 passed
+147 passed
 ```
 
 PostgreSQL・Redisを使用するRepository・API統合テスト：
@@ -219,7 +222,7 @@ python -m pytest -m integration -q
 実行結果：
 
 ```text
-65 passed
+68 passed
 ```
 
 全テスト：
@@ -231,7 +234,7 @@ python -m pytest -q
 現在の実行結果：
 
 ```text
-190 passed
+215 passed
 ```
 
 統合テストには、意図的にPostgreSQLの整数上限超過を発生させるテストが含まれています。スコアの加算処理が途中で失敗した場合でも、送信者の減算、受信者の加算、移動履歴の追加がすべてロールバックされることを確認しています。
@@ -240,8 +243,8 @@ python -m pytest -q
 
 `.github/workflows/ci.yml`により、pushおよびpull requestのたびに次の処理を自動実行します。
 
-* `component-tests`：PostgreSQLを使用しない125件のテスト
-* `integration-tests`：PostgreSQL 17の起動、Alembicマイグレーション、65件の統合テスト
+* `component-tests`：PostgreSQLを使用しない147件のテスト
+* `integration-tests`：PostgreSQL 17の起動、Alembicマイグレーション、68件の統合テスト
 * `docker-build`：DockerfileからAPIイメージを構築できることの確認
 
 ## プロジェクト構成
@@ -389,6 +392,10 @@ Pydanticを使用して、プレイヤー名の空白除去・文字数制限、
 
 `POST /auth/register`でログインユーザーを登録できます。パスワードはPydanticの`SecretStr`で通常表示から保護し、UserServiceでArgon2ハッシュへ変換してから`users`テーブルに保存します。平文パスワードとパスワードハッシュはAPIレスポンスに含めません。
 
+`POST /auth/token`はOAuth2のパスワードフォームでユーザー名とパスワードを受け取り、Argon2で保存済みパスワードハッシュを検証します。認証に成功した場合は、有効期限付きのJWTアクセストークンを発行します。JWTにはユーザー名を表す`sub`と有効期限`exp`を保存し、パスワードは含めません。
+
+プレイヤーの作成・削除、スコア追加、スコア移動には、`Authorization: Bearer <token>`による認証が必要です。プレイヤー取得、ランキング取得、移動履歴取得などの読み取りAPIは公開しています。ログイン情報またはアクセストークンが無効な場合は、`WWW-Authenticate: Bearer`ヘッダー付きの`401`を返します。
+
 ## Docker Composeによる実行
 
 `compose.yaml`を使用して、FastAPI、PostgreSQL、Redis、Alembicマイグレーションをまとめて起動できます。
@@ -419,13 +426,13 @@ Dockerイメージでは不要なファイルと`.env`を除外し、アプリ�
 
 ## 現在の制約
 
-* ユーザー登録とパスワードのハッシュ化は実装済みですが、ログイン、JWT、認可は未実装です。
+* ユーザー登録、ログイン、JWTによる基本的な認証・認可は実装済みですが、管理者と一般ユーザーを区別するロールベースの権限制御は未実装です。
 * Docker Composeによる開発用実行環境は構築済みですが、本番環境へのデプロイは未実装です。
 * 本プロジェクトは開発中のポートフォリオであり、本番運用を目的とした完成済みシステムではありません。
 
 ## 今後の予定
 
-* JWTによるログインと認可の実装
+* ロールベースの権限制御の実装
 * 本番環境へのデプロイ方法の整備
 
 
@@ -495,6 +502,8 @@ HTTP → FastAPI → PlayerService → PostgreSQL Repository → Psycopg → Pos
 * redis-py
 * pwdlib
 * Argon2
+* PyJWT
+* pwdlib / Argon2
 
 ### 当前 API
 
@@ -511,6 +520,7 @@ HTTP → FastAPI → PlayerService → PostgreSQL Repository → Psycopg → Pos
 | `POST`   | `/transfers`             | 转移积分 |
 | `GET`    | `/transfers`             | 查询转移历史（支持分页） |
 | `POST` | `/auth/register` | 注册登录用户 |
+| `POST` | `/auth/token` | 登录并签发JWT访问令牌 |
 
 创建玩家的请求示例：
 
@@ -615,7 +625,7 @@ python -m pytest -m "not integration" -q
 当前结果：
 
 ```text
-125 passed
+147 passed
 ```
 
 使用 PostgreSQL 与 Redis 的 Repository/API 集成测试：
@@ -627,7 +637,7 @@ python -m pytest -m integration -q
 当前结果：
 
 ```text
-65 passed
+68 passed
 ```
 
 执行全部测试：
@@ -639,15 +649,15 @@ python -m pytest -q
 当前结果：
 
 ```text
-190 passed
+215 passed
 ```
 
 ### GitHub Actions CI
 
 `.github/workflows/ci.yml` 会在每次 push 和 pull request 时自动执行：
 
-* `component-tests`：运行不需要 PostgreSQL 的125个测试
-* `integration-tests`：启动 PostgreSQL 17、执行 Alembic 迁移并运行65个集成测试
+* `component-tests`：运行不需要 PostgreSQL 的147个测试
+* `integration-tests`：启动 PostgreSQL 17、执行 Alembic 迁移并运行68个集成测试
 * `docker-build`：确认能够通过 Dockerfile 成功构建 API 镜像
 
 ### 事务设计
@@ -713,6 +723,10 @@ Redis 连接、读取、写入或删除失败，以及缓存中的 JSON 无效�
 
 可以通过`POST /auth/register`注册登录用户。密码首先由Pydantic的`SecretStr`避免在普通输出中暴露，再由UserService转换为Argon2哈希后保存到`users`表。API响应不会包含明文密码或密码哈希。
 
+`POST /auth/token`通过OAuth2密码表单接收用户名和密码，并使用Argon2验证数据库中保存的密码哈希。认证成功后，接口签发带有效期的JWT访问令牌。JWT只保存表示用户名的`sub`和过期时间`exp`，不会包含密码。
+
+创建或删除玩家、增加积分和转移积分时，必须通过`Authorization: Bearer <token>`完成身份认证。查询玩家、排行榜和转移历史等读取接口保持公开。登录信息或访问令牌无效时，API返回带有`WWW-Authenticate: Bearer`响应头的`401`。
+
 ### 测试覆盖的代表场景
 
 * 玩家名为空或仅包含空格
@@ -758,11 +772,11 @@ Docker镜像会排除无关文件和`.env`，并使用非root用户`appuser`运�
 
 ### 当前限制
 
-* 已实现用户注册和密码哈希，但尚未实现登录、JWT和权限控制
+* 已实现用户注册、登录和基于JWT的基础身份认证与访问控制，但尚未实现区分管理员与普通用户的角色权限控制
 * 已完成Docker Compose开发环境，但尚未完成线上部署
 * 当前是持续开发中的作品集项目，不能视为已经完成的生产级系统
 
 ### 后续计划
 
-* 实现基于JWT的登录与权限控制
+* 实现基于角色的权限控制
 * 完善线上部署方案

@@ -12,6 +12,7 @@ from player_exceptions import (
     PlayerNotFoundError,
     UnexpectedTransferResultError,
 )
+from user_exceptions import InvalidAccessTokenError
 
 
 def test_player_not_found_error_returns_404():
@@ -133,4 +134,26 @@ def test_unhandled_exception_returns_safe_500_and_is_logged(
     assert (
         "Sensitive internal information"
         not in response.text
+    )
+
+
+def test_invalid_access_token_returns_unauthorized():
+    app = FastAPI()
+    register_exception_handlers(app)
+
+    @app.get("/invalid-token")
+    def raise_invalid_token():
+        raise InvalidAccessTokenError
+
+    client = TestClient(app)
+
+    response = client.get("/invalid-token")
+
+    assert response.status_code == 401
+    assert response.json() == {
+        "detail": "Could not validate credentials"
+    }
+    assert (
+        response.headers["www-authenticate"]
+        == "Bearer"
     )

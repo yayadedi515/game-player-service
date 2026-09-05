@@ -178,6 +178,14 @@ def fake_service():
         dependencies.get_player_service
     ] = provide_fake_service
 
+    app.dependency_overrides[
+        dependencies.get_current_user
+    ] = lambda: {
+        "user_id": 1,
+        "username": "test-user",
+        "created_at": None
+    }
+
     try:
         yield service
     finally:

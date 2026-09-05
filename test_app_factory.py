@@ -35,9 +35,10 @@ def test_create_app_registers_business_exception_handlers():
     }
 
 
-def test_create_app_includes_auth_register_route():
+def test_create_app_includes_auth_routes():
     app = create_app()
 
     paths = app.openapi()["paths"]
 
     assert "/auth/register" in paths
+    assert "/auth/token" in paths

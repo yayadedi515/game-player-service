@@ -1,4 +1,5 @@
 import pytest
+import dependencies
 from fastapi.testclient import TestClient
 
 from main import app
@@ -15,6 +16,25 @@ pytestmark = [
 
 client = TestClient(app)
 repository = PlayerRepository()
+
+
+@pytest.fixture(autouse=True)
+def provide_authenticated_user():
+    app.dependency_overrides[
+        dependencies.get_current_user
+    ] = lambda: {
+        "user_id": 1,
+        "username": "integration-user",
+        "created_at": None
+    }
+
+    try:
+        yield
+    finally:
+        app.dependency_overrides.pop(
+            dependencies.get_current_user,
+            None
+        )
 
 
 def test_get_player_from_postgresql():

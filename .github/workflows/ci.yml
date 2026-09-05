@@ -18,6 +18,7 @@ jobs:
       DB_NAME: game_player_service_test
       DB_USER: postgres
       DB_PASSWORD: postgres
+      JWT_SECRET_KEY: test-only-ci-jwt-secret-key-123456789
 
     steps:
       - name: Check out repository
@@ -46,6 +47,7 @@ jobs:
           POSTGRES_DB: game_player_service_test
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
+          JWT_SECRET_KEY: test-only-ci-jwt-secret-key-123456789
         ports:
           - "5432:5432"
         options: >-

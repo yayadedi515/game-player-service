@@ -33,6 +33,19 @@ def migrated_test_database():
         environment.undo()
 
 
+@pytest.fixture(autouse=True)
+def provide_test_jwt_secret(monkeypatch):
+    monkeypatch.setenv(
+        "JWT_SECRET_KEY",
+        "test-only-jwt-secret-key-123456789"
+    )
+    get_settings.cache_clear()
+
+    yield
+
+    get_settings.cache_clear()
+
+
 @pytest.fixture
 def reset_test_database(
         monkeypatch,

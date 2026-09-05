@@ -1,4 +1,7 @@
-from user_exceptions import DuplicateUserError
+from user_exceptions import (
+    DuplicateUserError,
+    InvalidCredentialsError
+)
 from password_hasher_protocol import PasswordHasherProtocol
 from user_repository_protocol import UserRepositoryProtocol
 
@@ -28,6 +31,36 @@ class UserService:
         )
         if user is None:
             raise DuplicateUserError
+
+        return {
+            "user_id": user["user_id"],
+            "username": user["username"],
+            "created_at": user["created_at"]
+        }
+
+    def authenticate_user(
+            self,
+            username: str,
+            plain_password: str
+    ) -> dict:
+        user = (
+            self.repository
+            .find_user_by_username(username)
+        )
+
+        if user is None:
+            raise InvalidCredentialsError
+
+        password_matches = (
+            self.password_hasher
+            .verify_password(
+                plain_password,
+                user["password_hash"]
+            )
+        )
+
+        if not password_matches:
+            raise InvalidCredentialsError
 
         return {
             "user_id": user["user_id"],

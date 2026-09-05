@@ -1,7 +1,7 @@
 import pytest
 from pydantic import ValidationError, SecretStr
 
-from schemas import UserRegister
+from schemas import UserRegister, TokenResponse
 
 
 def test_user_register_validates_and_cleans_input():
@@ -32,3 +32,13 @@ def test_user_register_rejects_blank_username():
             username="       ",
             password="test-password-123!"
         )
+
+
+def test_token_response_contains_bearer_token():
+    response = TokenResponse(
+        access_token="example-token",
+        token_type="bearer"
+    )
+
+    assert response.access_token == "example-token"
+    assert response.token_type == "bearer"

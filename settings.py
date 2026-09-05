@@ -20,6 +20,14 @@ class Settings(BaseSettings):
     db_name: str
     db_user: str
     db_password: SecretStr
+    jwt_secret_key: SecretStr = Field(
+        min_length=32
+    )
+    access_token_expire_minutes: int = Field(
+        default=30,
+        ge=1,
+        le=1440
+    )
     redis_host: str = Field(
         default="localhost",
         min_length=1

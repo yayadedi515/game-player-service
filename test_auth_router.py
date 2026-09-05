@@ -2,10 +2,15 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 import pytest
 
-from dependencies import get_user_service
+from dependencies import (
+    get_token_service,
+    get_user_service,
+)
 from routers.auth import router as auth_router
 from exception_handlers import register_exception_handlers
 from user_exceptions import DuplicateUserError
+from app_factory import create_app
+from user_exceptions import InvalidCredentialsError
 
 
 class FakeUserService:
@@ -105,3 +110,107 @@ def test_register_user_rejects_invalid_input(payload):
 
     assert response.status_code == 422
     assert fake_service.register_request is None
+
+
+def test_login_returns_access_token():
+    class FakeUserService:
+        def __init__(self):
+            self.authenticate_request = None
+
+        def authenticate_user(
+                self,
+                username,
+                password
+        ):
+            self.authenticate_request = (
+                username,
+                password
+            )
+            return {
+                "user_id": 1,
+                "username": username,
+                "created_at": None
+            }
+
+    class FakeTokenService:
+        def __init__(self):
+            self.requested_subject = None
+
+        def create_access_token(self, subject):
+            self.requested_subject = subject
+            return "generated-access-token"
+
+    app = create_app()
+    user_service = FakeUserService()
+    token_service = FakeTokenService()
+
+    app.dependency_overrides[
+        get_user_service
+    ] = lambda: user_service
+    app.dependency_overrides[
+        get_token_service
+    ] = lambda: token_service
+
+    client = TestClient(app)
+
+    response = client.post(
+        "/auth/token",
+        data={
+            "username": "aooshiro",
+            "password": "test-password-123!"
+        }
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "access_token": "generated-access-token",
+        "token_type": "bearer"
+    }
+    assert user_service.authenticate_request == (
+        "aooshiro",
+        "test-password-123!"
+    )
+    assert token_service.requested_subject == "aooshiro"
+
+
+def test_login_invalid_credentials_returns_unauthorized():
+    class FakeUserService:
+        def authenticate_user(
+                self,
+                username,
+                password
+        ):
+            raise InvalidCredentialsError
+
+    class FakeTokenService:
+        def create_access_token(self, subject):
+            raise AssertionError(
+                "Token must not be created"
+            )
+
+    app = create_app()
+    app.dependency_overrides[
+        get_user_service
+    ] = lambda: FakeUserService()
+    app.dependency_overrides[
+        get_token_service
+    ] = lambda: FakeTokenService()
+
+    client = TestClient(app)
+
+    response = client.post(
+        "/auth/token",
+        data={
+            "username": "aooshiro",
+            "password": "wrong-password"
+        }
+    )
+
+    assert response.status_code == 401
+    assert response.json() == {
+        "detail": "Invalid username or password"
+    }
+    assert (
+        response.headers["www-authenticate"]
+        == "Bearer"
+    )

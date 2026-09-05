@@ -48,6 +48,11 @@ class UserResponse(BaseModel):
     username: str
 
 
+class TokenResponse(BaseModel):
+    access_token: str
+    token_type: Literal["bearer"]
+
+
 class PlayerCreate(BaseModel):
     name: PlayerName
 

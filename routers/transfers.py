@@ -2,7 +2,10 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query
 
-from dependencies import get_player_service
+from dependencies import (
+    get_current_user,
+    get_player_service
+)
 from schemas import ScoreTransfer, TransferResponse, TransferHistoryResponse
 
 
@@ -16,7 +19,8 @@ router = APIRouter(tags=["Transfers"])
 )
 def transfer_player_score(
         transfer: ScoreTransfer,
-        service=Depends(get_player_service)
+        service=Depends(get_player_service),
+        _current_user=Depends(get_current_user)
 ):
     return service.transfer_score(
         transfer.sender,

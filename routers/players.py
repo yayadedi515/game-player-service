@@ -1,6 +1,9 @@
 from fastapi import APIRouter, Depends
 
-from dependencies import get_player_service
+from dependencies import (
+    get_current_user,
+    get_player_service
+)
 from schemas import (
     PlayerName,
     PlayerResponse,
@@ -48,8 +51,9 @@ def get_ranking(
     response_model=PlayerResponse
 )
 def create_player(
-    player: PlayerCreate,
-    service=Depends(get_player_service)
+        player: PlayerCreate,
+        service=Depends(get_player_service),
+        _current_user=Depends(get_current_user)
 ):
     created_player = service.create_player(
         player.name
@@ -68,7 +72,8 @@ def create_player(
 )
 def delete_player(
     name: PlayerName,
-    service=Depends(get_player_service)
+    service=Depends(get_player_service),
+    _current_user=Depends(get_current_user)
 ):
     deleted_player = service.delete_player(name)
 
@@ -86,7 +91,8 @@ def delete_player(
 def add_player_score(
     name: PlayerName,
     score_add: ScoreAdd,
-    service=Depends(get_player_service)
+    service=Depends(get_player_service),
+    _current_user=Depends(get_current_user)
 ):
     player = service.add_score(
         name,

@@ -1,3 +1,6 @@
+from typing import Annotated
+
+from fastapi.security import OAuth2PasswordBearer
 from fastapi import Depends
 
 from redis import Redis
@@ -11,7 +14,14 @@ from ranking_cache import RedisRankingCache
 from password_hasher import PasswordHasher
 from user_repository import UserRepository
 from user_service import UserService
+from token_service import TokenService
+from jwt import InvalidTokenError
+from user_exceptions import InvalidAccessTokenError
 
+
+oauth2_scheme = OAuth2PasswordBearer(
+    tokenUrl="/auth/token"
+)
 
 
 def get_player_repository():
@@ -73,3 +83,48 @@ def get_user_service(
         repository,
         password_hasher
     )
+
+
+def get_token_service(
+        settings=Depends(get_settings)
+):
+    return TokenService(
+        secret_key=(
+            settings.jwt_secret_key
+            .get_secret_value()
+        ),
+        expire_minutes=(
+            settings.access_token_expire_minutes
+        )
+    )
+
+
+def get_current_user(
+        token: Annotated[
+            str,
+            Depends(oauth2_scheme)
+        ],
+        token_service=Depends(get_token_service),
+        repository=Depends(get_user_repository)
+):
+    try:
+        username = (
+            token_service.decode_access_token(
+                token
+            )
+        )
+    except InvalidTokenError as error:
+        raise InvalidAccessTokenError from error
+
+    user = repository.find_user_by_username(
+        username
+    )
+
+    if user is None:
+        raise InvalidAccessTokenError
+
+    return {
+        "user_id": user["user_id"],
+        "username": user["username"],
+        "created_at": user["created_at"]
+    }
