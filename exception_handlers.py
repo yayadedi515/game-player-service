@@ -10,6 +10,7 @@ from player_exceptions import (
     PlayerNotFoundError,
     UnexpectedTransferResultError
 )
+from user_exceptions import DuplicateUserError
 
 
 BUSINESS_ERROR_RESPONSES = {
@@ -20,6 +21,10 @@ BUSINESS_ERROR_RESPONSES = {
     DuplicatePlayerError: (
         400,
         "Invalid or duplicate player"
+    ),
+    DuplicateUserError: (
+        409,
+        "Username already exists"
     ),
     PlayerDeletionRestrictedError: (
         409,
@@ -36,7 +41,7 @@ BUSINESS_ERROR_RESPONSES = {
     UnexpectedTransferResultError: (
         500,
         "Unexpected transfer result"
-    )
+    ),
 }
 
 

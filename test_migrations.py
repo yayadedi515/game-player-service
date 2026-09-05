@@ -54,3 +54,29 @@ def test_transfer_history_foreign_keys_have_indexes():
 
     assert "ix_transfer_history_sender_id" in index_names
     assert "ix_transfer_history_receiver_id" in index_names
+
+
+def test_users_table_has_required_columns():
+    with get_connection() as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT column_name
+                FROM information_schema.columns
+                WHERE table_schema = 'public'
+                  AND table_name = 'users'
+                """
+            )
+            rows = cursor.fetchall()
+
+    column_names = {
+        row[0]
+        for row in rows
+    }
+
+    assert column_names == {
+        "user_id",
+        "username",
+        "password_hash",
+        "created_at"
+    }

@@ -8,6 +8,9 @@ from settings import get_settings
 from player_repository import PlayerRepository
 from player_service import PlayerService
 from ranking_cache import RedisRankingCache
+from password_hasher import PasswordHasher
+from user_repository import UserRepository
+from user_service import UserService
 
 
 
@@ -51,4 +54,22 @@ def get_player_service(
     return PlayerService(
         repository,
         ranking_cache=ranking_cache
+    )
+
+
+def get_user_repository():
+    return UserRepository()
+
+
+def get_password_hasher():
+    return PasswordHasher()
+
+
+def get_user_service(
+        repository=Depends(get_user_repository),
+        password_hasher=Depends(get_password_hasher)
+):
+    return UserService(
+        repository,
+        password_hasher
     )

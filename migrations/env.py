@@ -10,9 +10,12 @@ from settings import get_settings
 config = context.config
 
 if config.config_file_name is not None:
-    fileConfig(config.config_file_name)
+    fileConfig(
+        config.config_file_name,
+        disable_existing_loggers=False
+    )
 
-# 项目没有使用 SQLAlchemy ORM，因此没有模型元数据。
+# 没用到ORM，没元数据====
 target_metadata = None
 
 

@@ -5,7 +5,8 @@ from pydantic import (
     BaseModel,
     Field,
     StringConstraints,
-    model_validator
+    model_validator,
+    SecretStr,
 )
 
 
@@ -17,6 +18,34 @@ PlayerName = Annotated[
         max_length=50
     )
 ]
+
+
+UserName = Annotated[
+    str,
+    StringConstraints(
+        strip_whitespace=True,
+        min_length=1,
+        max_length=50
+    )
+]
+
+
+UserPassword = Annotated[
+    SecretStr,
+    Field(
+        min_length=8,
+        max_length=128
+    )
+]
+
+
+class UserRegister(BaseModel):
+    username: UserName
+    password: UserPassword
+
+
+class UserResponse(BaseModel):
+    username: str
 
 
 class PlayerCreate(BaseModel):

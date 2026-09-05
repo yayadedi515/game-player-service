@@ -33,3 +33,11 @@ def test_create_app_registers_business_exception_handlers():
     assert response.json() == {
         "detail": "Player not found"
     }
+
+
+def test_create_app_includes_auth_register_route():
+    app = create_app()
+
+    paths = app.openapi()["paths"]
+
+    assert "/auth/register" in paths

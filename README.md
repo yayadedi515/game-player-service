@@ -61,6 +61,8 @@ HTTP → FastAPI → PlayerService → PostgreSQL Repository → Psycopg → Pos
 * Docker Compose
 * Redis
 * redis-py
+* pwdlib
+* Argon2
 
 ## API
 
@@ -76,6 +78,7 @@ HTTP → FastAPI → PlayerService → PostgreSQL Repository → Psycopg → Pos
 | `PATCH`  | `/players/{name}/score` | スコアの追加 |
 | `POST`   | `/transfers`             | スコアの移動 |
 | `GET`    | `/transfers`             | 移動履歴の取得（ページング対応） |
+| `POST` | `/auth/register` | ログインユーザーの登録 |
 
 プレイヤー作成リクエストの例：
 
@@ -204,7 +207,7 @@ python -m pytest -m "not integration" -q
 実行結果：
 
 ```text
-108 passed
+125 passed
 ```
 
 PostgreSQL・Redisを使用するRepository・API統合テスト：
@@ -216,7 +219,7 @@ python -m pytest -m integration -q
 実行結果：
 
 ```text
-57 passed
+65 passed
 ```
 
 全テスト：
@@ -228,7 +231,7 @@ python -m pytest -q
 現在の実行結果：
 
 ```text
-165 passed
+190 passed
 ```
 
 統合テストには、意図的にPostgreSQLの整数上限超過を発生させるテストが含まれています。スコアの加算処理が途中で失敗した場合でも、送信者の減算、受信者の加算、移動履歴の追加がすべてロールバックされることを確認しています。
@@ -237,8 +240,8 @@ python -m pytest -q
 
 `.github/workflows/ci.yml`により、pushおよびpull requestのたびに次の処理を自動実行します。
 
-* `component-tests`：PostgreSQLを使用しない108件のテスト
-* `integration-tests`：PostgreSQL 17の起動、Alembicマイグレーション、57件の統合テスト
+* `component-tests`：PostgreSQLを使用しない125件のテスト
+* `integration-tests`：PostgreSQL 17の起動、Alembicマイグレーション、65件の統合テスト
 * `docker-build`：DockerfileからAPIイメージを構築できることの確認
 
 ## プロジェクト構成
@@ -256,9 +259,16 @@ python -m pytest -q
 ├── dependencies.py
 ├── routers/
 │   ├── __init__.py
+│   ├── auth.py
 │   ├── health.py
 │   ├── players.py
 │   └── transfers.py
+├── password_hasher.py
+├── password_hasher_protocol.py
+├── user_service.py
+├── user_repository.py
+├── user_repository_protocol.py
+├── user_exceptions.py
 ├── schemas.py
 ├── player_service.py
 ├── legacy_player_service.py
@@ -278,12 +288,19 @@ python -m pytest -q
 │   └── versions/
 │       └── 019dd3348d7e_create_players_and_transfer_history_.py
 │       └── 8823f987778c_add_transfer_history_foreign_key_indexes.py
+│       └── b0aae66c3618_create_users_table.py
 ├── test_main.py
 ├── test_main_integration.py
 ├── test_player_service.py
 ├── test_legacy_player_service.py
 ├── test_player_repository.py
 ├── test_app_factory.py
+├── test_auth_router.py
+├── test_auth_integration.py
+├── test_password_hasher.py
+├── test_user_repository.py
+├── test_user_schemas.py
+├── test_user_service.py
 ├── test_dependencies.py
 ├── test_health_router.py
 ├── test_exception_handlers.py
@@ -368,6 +385,10 @@ Pydanticを使用して、プレイヤー名の空白除去・文字数制限、
 
 また、すべての成功レスポンスにレスポンスモデルを設定し、FastAPIが返却データを検証するとともに、Swaggerに明確なAPI仕様を表示します。
 
+### ユーザー登録とパスワード保護
+
+`POST /auth/register`でログインユーザーを登録できます。パスワードはPydanticの`SecretStr`で通常表示から保護し、UserServiceでArgon2ハッシュへ変換してから`users`テーブルに保存します。平文パスワードとパスワードハッシュはAPIレスポンスに含めません。
+
 ## Docker Composeによる実行
 
 `compose.yaml`を使用して、FastAPI、PostgreSQL、Redis、Alembicマイグレーションをまとめて起動できます。
@@ -398,13 +419,13 @@ Dockerイメージでは不要なファイルと`.env`を除外し、アプリ�
 
 ## 現在の制約
 
-* 認証・認可は未実装です。
+* ユーザー登録とパスワードのハッシュ化は実装済みですが、ログイン、JWT、認可は未実装です。
 * Docker Composeによる開発用実行環境は構築済みですが、本番環境へのデプロイは未実装です。
 * 本プロジェクトは開発中のポートフォリオであり、本番運用を目的とした完成済みシステムではありません。
 
 ## 今後の予定
 
-* 認証・認可の実装
+* JWTによるログインと認可の実装
 * 本番環境へのデプロイ方法の整備
 
 
@@ -472,6 +493,8 @@ HTTP → FastAPI → PlayerService → PostgreSQL Repository → Psycopg → Pos
 * Docker Compose
 * Redis
 * redis-py
+* pwdlib
+* Argon2
 
 ### 当前 API
 
@@ -487,6 +510,7 @@ HTTP → FastAPI → PlayerService → PostgreSQL Repository → Psycopg → Pos
 | `PATCH`  | `/players/{name}/score` | 增加积分 |
 | `POST`   | `/transfers`             | 转移积分 |
 | `GET`    | `/transfers`             | 查询转移历史（支持分页） |
+| `POST` | `/auth/register` | 注册登录用户 |
 
 创建玩家的请求示例：
 
@@ -591,7 +615,7 @@ python -m pytest -m "not integration" -q
 当前结果：
 
 ```text
-108 passed
+125 passed
 ```
 
 使用 PostgreSQL 与 Redis 的 Repository/API 集成测试：
@@ -603,7 +627,7 @@ python -m pytest -m integration -q
 当前结果：
 
 ```text
-57 passed
+65 passed
 ```
 
 执行全部测试：
@@ -615,15 +639,15 @@ python -m pytest -q
 当前结果：
 
 ```text
-165 passed
+190 passed
 ```
 
 ### GitHub Actions CI
 
 `.github/workflows/ci.yml` 会在每次 push 和 pull request 时自动执行：
 
-* `component-tests`：运行不需要 PostgreSQL 的108个测试
-* `integration-tests`：启动 PostgreSQL 17、执行 Alembic 迁移并运行57个集成测试
+* `component-tests`：运行不需要 PostgreSQL 的125个测试
+* `integration-tests`：启动 PostgreSQL 17、执行 Alembic 迁移并运行65个集成测试
 * `docker-build`：确认能够通过 Dockerfile 成功构建 API 镜像
 
 ### 事务设计
@@ -685,6 +709,10 @@ Redis 连接、读取、写入或删除失败，以及缓存中的 JSON 无效�
 
 所有成功响应都配置了响应模型，使 FastAPI 能在返回前检查数据结构，并在 Swagger 中生成明确的 API 说明。
 
+### 用户注册与密码保护
+
+可以通过`POST /auth/register`注册登录用户。密码首先由Pydantic的`SecretStr`避免在普通输出中暴露，再由UserService转换为Argon2哈希后保存到`users`表。API响应不会包含明文密码或密码哈希。
+
 ### 测试覆盖的代表场景
 
 * 玩家名为空或仅包含空格
@@ -730,11 +758,11 @@ Docker镜像会排除无关文件和`.env`，并使用非root用户`appuser`运�
 
 ### 当前限制
 
-* 尚未实现认证和权限控制
+* 已实现用户注册和密码哈希，但尚未实现登录、JWT和权限控制
 * 已完成Docker Compose开发环境，但尚未完成线上部署
 * 当前是持续开发中的作品集项目，不能视为已经完成的生产级系统
 
 ### 后续计划
 
-* 实现认证和权限控制
+* 实现基于JWT的登录与权限控制
 * 完善线上部署方案

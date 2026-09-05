@@ -53,7 +53,8 @@ def reset_test_database(
                     """
                     TRUNCATE TABLE
                         transfer_history,
-                        players
+                        players,
+                        users
                     RESTART IDENTITY
                     """
                 )
@@ -78,7 +79,8 @@ def reset_test_database(
                     """
                     TRUNCATE TABLE
                         transfer_history,
-                        players
+                        players,
+                        users
                     RESTART IDENTITY
                     """
                 )

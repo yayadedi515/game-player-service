@@ -3,11 +3,19 @@ from dependencies import (
     get_player_service,
     get_redis_client,
     get_ranking_cache,
+    get_user_repository,
+    get_password_hasher,
+    get_user_service,
 )
 from player_service import PlayerService
 from player_repository import PlayerRepository
 from player_repository_protocol import PlayerRepositoryProtocol
 from ranking_cache import RedisRankingCache
+from password_hasher import PasswordHasher
+from user_repository import UserRepository
+from user_service import UserService
+from password_hasher_protocol import PasswordHasherProtocol
+from user_repository_protocol import UserRepositoryProtocol
 
 class FakeSettings:
     redis_host = "cache"
@@ -79,3 +87,40 @@ def test_get_ranking_cache_uses_client_and_ttl():
     assert isinstance(cache, RedisRankingCache)
     assert cache.redis_client is redis_client
     assert cache.ttl_seconds == 120
+
+
+def test_get_user_repository_returns_user_repository():
+    repository = get_user_repository()
+
+    assert isinstance(repository, UserRepository)
+    assert isinstance(
+        repository,
+        UserRepositoryProtocol
+    )
+
+
+def test_get_password_hasher_returns_password_hasher():
+    password_hasher = get_password_hasher()
+
+    assert isinstance(
+        password_hasher,
+        PasswordHasher
+    )
+    assert isinstance(
+        password_hasher,
+        PasswordHasherProtocol
+    )
+
+
+def test_get_user_service_uses_provided_dependencies():
+    repository = UserRepository()
+    password_hasher = PasswordHasher()
+
+    service = get_user_service(
+        repository,
+        password_hasher
+    )
+
+    assert isinstance(service, UserService)
+    assert service.repository is repository
+    assert service.password_hasher is password_hasher
