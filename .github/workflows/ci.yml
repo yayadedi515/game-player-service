@@ -47,7 +47,6 @@ jobs:
           POSTGRES_DB: game_player_service_test
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
-          JWT_SECRET_KEY: test-only-ci-jwt-secret-key-123456789
         ports:
           - "5432:5432"
         options: >-
@@ -73,6 +72,7 @@ jobs:
       REDIS_HOST: localhost
       REDIS_PORT: "6379"
       RANKING_CACHE_TTL_SECONDS: "60"
+      JWT_SECRET_KEY: test-only-ci-jwt-secret-key-123456789
 
     steps:
       - name: Check out repository
