@@ -20,6 +20,7 @@ def test_create_user_stores_password_hash():
     assert user["user_id"] == 1
     assert user["username"] == "aooshiro"
     assert user["password_hash"] == "stored-password-hash"
+    assert user["role"] == "user"
     assert user["created_at"] is not None
 
 

@@ -20,13 +20,14 @@ router = APIRouter(tags=["Transfers"])
 def transfer_player_score(
         transfer: ScoreTransfer,
         service=Depends(get_player_service),
-        _current_user=Depends(get_current_user)
+        current_user=Depends(get_current_user)
 ):
     return service.transfer_score(
         transfer.sender,
         transfer.receiver,
-        transfer.points
-    )
+        transfer.points,
+        current_user
+)
 
 
 @router.get(

@@ -15,6 +15,9 @@ from dependencies import (
 class FakePlayerService:
     def __init__(self):
         self.created_name = None
+        self.score_request = None
+        self.delete_request = None
+        self.transfer_request = None
 
     def create_player(
             self,
@@ -28,6 +31,62 @@ class FakePlayerService:
             "score": 0,
             "created_at": None,
             "owner_user_id": owner_user_id
+        }
+
+    def add_score(
+            self,
+            name,
+            points
+    ):
+        self.score_request = (
+            name,
+            points
+        )
+
+        return {
+            "player_id": 1,
+            "name": name,
+            "score": 120 + points,
+            "created_at": None,
+            "owner_user_id": 1
+        }
+
+    def delete_player(
+            self,
+            name,
+            current_user
+    ):
+        self.delete_request = (
+            name,
+            current_user
+        )
+
+        return {
+            "player_id": 1,
+            "name": name,
+            "score": 120,
+            "created_at": None,
+            "owner_user_id": current_user["user_id"]
+        }
+
+    def transfer_score(
+            self,
+            sender,
+            receiver,
+            points,
+            current_user
+    ):
+        self.transfer_request = (
+            sender,
+            receiver,
+            points,
+            current_user
+        )
+
+        return {
+            "sender": sender,
+            "receiver": receiver,
+            "points": points
         }
 
 
@@ -105,7 +164,8 @@ def test_authenticated_user_can_create_player():
     ] = lambda: {
         "user_id": 1,
         "username": "aooshiro",
-        "created_at": None
+        "created_at": None,
+        "role": "user"
     }
 
     client = TestClient(app)
@@ -169,4 +229,153 @@ def test_write_endpoint_rejects_invalid_access_token():
     assert (
         response.headers["www-authenticate"]
         == "Bearer"
+    )
+
+
+def test_regular_user_cannot_add_score():
+    app = create_app()
+    service = FakePlayerService()
+
+    app.dependency_overrides[
+        get_player_service
+    ] = lambda: service
+
+    app.dependency_overrides[
+        get_current_user
+    ] = lambda: {
+        "user_id": 1,
+        "username": "regular-user",
+        "created_at": None,
+        "role": "user"
+    }
+
+    client = TestClient(app)
+
+    response = client.patch(
+        "/players/Alice/score",
+        json={
+            "points": 30
+        }
+    )
+
+    assert response.status_code == 403
+    assert response.json() == {
+        "detail": "Permission denied"
+    }
+    assert service.score_request is None
+
+
+def test_admin_user_can_add_score():
+    app = create_app()
+    service = FakePlayerService()
+
+    app.dependency_overrides[
+        get_player_service
+    ] = lambda: service
+
+    app.dependency_overrides[
+        get_current_user
+    ] = lambda: {
+        "user_id": 2,
+        "username": "admin-user",
+        "created_at": None,
+        "role": "admin"
+    }
+
+    client = TestClient(app)
+
+    response = client.patch(
+        "/players/Alice/score",
+        json={
+            "points": 30
+        }
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "name": "Alice",
+        "score": 150
+    }
+    assert service.score_request == (
+        "Alice",
+        30
+    )
+
+
+def test_delete_player_passes_current_user_to_service():
+    app = create_app()
+    service = FakePlayerService()
+
+    current_user = {
+        "user_id": 1,
+        "username": "player-owner",
+        "created_at": None,
+        "role": "user"
+    }
+
+    app.dependency_overrides[
+        get_player_service
+    ] = lambda: service
+
+    app.dependency_overrides[
+        get_current_user
+    ] = lambda: current_user
+
+    client = TestClient(app)
+
+    response = client.delete(
+        "/players/Alice"
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "message": "Alice has been deleted"
+    }
+    assert service.delete_request == (
+        "Alice",
+        current_user
+    )
+
+
+def test_transfer_passes_current_user_to_service():
+    app = create_app()
+    service = FakePlayerService()
+
+    current_user = {
+        "user_id": 1,
+        "username": "player-owner",
+        "created_at": None,
+        "role": "user"
+    }
+
+    app.dependency_overrides[
+        get_player_service
+    ] = lambda: service
+
+    app.dependency_overrides[
+        get_current_user
+    ] = lambda: current_user
+
+    client = TestClient(app)
+
+    response = client.post(
+        "/transfers",
+        json={
+            "sender": "Alice",
+            "receiver": "Bob",
+            "points": 30
+        }
+    )
+
+    assert response.status_code == 201
+    assert response.json() == {
+        "sender": "Alice",
+        "receiver": "Bob",
+        "points": 30
+    }
+    assert service.transfer_request == (
+        "Alice",
+        "Bob",
+        30,
+        current_user
     )

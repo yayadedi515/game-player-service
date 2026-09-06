@@ -42,3 +42,12 @@ def test_token_response_contains_bearer_token():
 
     assert response.access_token == "example-token"
     assert response.token_type == "bearer"
+
+
+def test_user_register_rejects_client_supplied_role():
+    with pytest.raises(ValidationError):
+        UserRegister(
+            username="attacker",
+            password="test-password-123!",
+            role="admin"
+        )

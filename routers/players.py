@@ -2,7 +2,8 @@ from fastapi import APIRouter, Depends
 
 from dependencies import (
     get_current_user,
-    get_player_service
+    get_player_service,
+    require_admin
 )
 from schemas import (
     PlayerName,
@@ -74,9 +75,12 @@ def create_player(
 def delete_player(
     name: PlayerName,
     service=Depends(get_player_service),
-    _current_user=Depends(get_current_user)
+    current_user=Depends(get_current_user)
 ):
-    deleted_player = service.delete_player(name)
+    deleted_player = service.delete_player(
+        name,
+        current_user
+    )
 
     return {
         "message": (
@@ -93,7 +97,7 @@ def add_player_score(
     name: PlayerName,
     score_add: ScoreAdd,
     service=Depends(get_player_service),
-    _current_user=Depends(get_current_user)
+    _admin_user=Depends(require_admin)
 ):
     player = service.add_score(
         name,

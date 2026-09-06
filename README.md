@@ -197,7 +197,7 @@ python -m alembic upgrade head
 統合テストの開始時には、`migrated_test_database` fixtureが接続先を`game_player_service_test`へ切り替え、同じマイグレーションを自動的に適用します。ホスト、ポート、ユーザー、パスワードには`.env`の設定を使用します。
 
 > [!WARNING]
-> 統合テストは`game_player_service_test`内の`players`と`transfer_history`のデータをテスト前後に削除します。重要なデータを保存しないでください。
+> 統合テストは`game_player_service_test`内の`transfer_history`、`players`、`users`のデータをテスト前後に削除します。また、Redisを使用するテストは`ranking`キャッシュキーを削除します。テスト用データベースや共有Redisに重要なデータを保存しないでください。
 
 ## テスト
 
@@ -210,7 +210,7 @@ python -m pytest -m "not integration" -q
 実行結果：
 
 ```text
-149 passed
+163 passed
 ```
 
 PostgreSQL・Redisを使用するRepository・API統合テスト：
@@ -222,7 +222,7 @@ python -m pytest -m integration -q
 実行結果：
 
 ```text
-73 passed
+78 passed
 ```
 
 全テスト：
@@ -234,7 +234,7 @@ python -m pytest -q
 現在の実行結果：
 
 ```text
-222 passed
+241 passed
 ```
 
 統合テストには、意図的にPostgreSQLの整数上限超過を発生させるテストが含まれています。スコアの加算処理が途中で失敗した場合でも、送信者の減算、受信者の加算、移動履歴の追加がすべてロールバックされることを確認しています。
@@ -243,8 +243,8 @@ python -m pytest -q
 
 `.github/workflows/ci.yml`により、pushおよびpull requestのたびに次の処理を自動実行します。
 
-* `component-tests`：PostgreSQLを使用しない149件のテスト
-* `integration-tests`：PostgreSQL 17の起動、Alembicマイグレーション、73件の統合テスト
+* `component-tests`：PostgreSQLを使用しない163件のテスト
+* `integration-tests`：PostgreSQL 17の起動、Alembicマイグレーション、78件の統合テスト
 * `docker-build`：DockerfileからAPIイメージを構築できることの確認
 
 ## プロジェクト構成
@@ -268,7 +268,8 @@ python -m pytest -q
 │       ├── 019dd3348d7e_create_players_and_transfer_history_.py
 │       ├── 8823f987778c_add_transfer_history_foreign_key_indexes.py
 │       ├── b0aae66c3618_create_users_table.py
-│       └── 6c3a3c901882_add_player_ownership.py
+│       ├── 6c3a3c901882_add_player_ownership.py
+│       └── f945c9de2bd9_add_user_roles.py
 ├── main.py
 ├── app_factory.py
 ├── dependencies.py
@@ -349,13 +350,14 @@ FastAPIのendpointはRepositoryを直接呼び出さず、PlayerServiceを経由
 
 ### データベースマイグレーション
 
-Alembicを使用して、PostgreSQLのテーブル構造をバージョン管理しています。最初のマイグレーションでは`players`と`transfer_history`を作成し、外部キー、CHECK制約、UNIQUE制約も定義しています。2番目のマイグレーションでは、外部キー確認とプレイヤー別履歴検索を効率化するため、送信者IDと受信者IDにインデックスを追加しています。
+Alembicを使用して、PostgreSQLのテーブル構造をバージョン管理しています。最初のマイグレーションでは`players`と`transfer_history`を作成し、2番目では外部キー列にインデックスを追加しました。3番目ではログインユーザーを保存する`users`テーブルを作成し、4番目では`players.owner_user_id`と外部キー・UNIQUE制約を追加しました。5番目では`users.role`を追加し、初期値を`user`として、`user`または`admin`だけを許可するCHECK制約を設定しています。
 
 新しいデータベースには`alembic upgrade head`で最新構造を作成します。既に同じ構造を持つ開発データベースには`alembic stamp head`を使用し、テーブルを再作成せずに現在のバージョンだけを登録しました。統合テストでは、テスト開始時に最新のマイグレーションを自動適用します。
 
 ### 環境設定の一元管理
 
 `pydantic-settings`を使用して、PostgreSQLとRedisの接続設定を環境変数または`.env`から読み込み、必須項目とポート番号の範囲を検証しています。`DB_PASSWORD`は`SecretStr`で通常の表示時にマスクし、`get_settings()`によって検証済みの設定をキャッシュします。Redisには0.5秒の接続・読み書きタイムアウトを設定し、キャッシュ障害時に早くPostgreSQLへ切り替えられるようにしています。
+
 ### 同時更新への対応
 
 対象プレイヤーを`SELECT ... FOR UPDATE`でロックします。また、`player_id`順にロックを取得することで、異なるトランザクション間のデッドロックリスクを低減しています。
@@ -392,15 +394,17 @@ Pydanticを使用して、プレイヤー名の空白除去・文字数制限、
 
 また、すべての成功レスポンスにレスポンスモデルを設定し、FastAPIが返却データを検証するとともに、Swaggerに明確なAPI仕様を表示します。
 
-### ユーザー認証とJWT
+### ユーザー認証・所有権・ロール認可
 
 `POST /auth/register`でログインユーザーを登録できます。パスワードはPydanticの`SecretStr`で通常表示から保護し、UserServiceでArgon2ハッシュへ変換してから`users`テーブルに保存します。平文パスワードとパスワードハッシュはAPIレスポンスに含めません。
 
-`POST /auth/token`はOAuth2のパスワードフォームでユーザー名とパスワードを受け取り、Argon2で保存済みパスワードハッシュを検証します。認証に成功した場合は、有効期限付きのJWTアクセストークンを発行します。JWTにはユーザー名を表す`sub`と有効期限`exp`を保存し、パスワードは含めません。
+`POST /auth/token`はOAuth2のパスワードフォームでユーザー名とパスワードを受け取り、Argon2で保存済みパスワードハッシュを検証します。認証に成功した場合は、有効期限付きのJWTアクセストークンを発行します。JWTにはユーザー名を表す`sub`と有効期限`exp`を保存し、パスワードやロールは含めません。
 
-プレイヤー作成時には、JWT認証から特定した現在のログインユーザーの`user_id`を、`players.owner_user_id`へ自動的に保存します。クライアントから`owner_user_id`を指定することはできません。外部キーにより実在するユーザーだけを所有者にでき、UNIQUE制約により1ユーザーが所有できるプレイヤーを1件に制限しています。既存データとの互換性のため、未紐付けのプレイヤーでは`owner_user_id`を`NULL`にできます。
+プレイヤー作成時には、JWT認証から特定した現在のログインユーザーの`user_id`を`players.owner_user_id`へ自動的に保存します。クライアントから`owner_user_id`を指定することはできません。外部キーにより実在するユーザーだけを所有者にでき、UNIQUE制約により1ユーザーが所有できるプレイヤーを1件に制限しています。既存データとの互換性のため、未紐付けのプレイヤーでは`owner_user_id`を`NULL`にできます。
 
-プレイヤーの作成・削除、スコア追加、スコア移動には、`Authorization: Bearer <token>`による認証が必要です。プレイヤー取得、ランキング取得、移動履歴取得などの読み取りAPIは公開しています。ログイン情報またはアクセストークンが無効な場合は、`WWW-Authenticate: Bearer`ヘッダー付きの`401`を返します。
+`users.role`には`user`または`admin`を保存します。公開登録で作成されるユーザーは必ず`user`となり、クライアントが登録リクエストで`role`を指定した場合は`422`を返します。認証時にはJWTのユーザー名を基にデータベースから最新のユーザー情報とロールを取得します。
+
+プレイヤー作成は認証済みユーザーに許可し、スコア追加は管理者だけに許可します。プレイヤー削除は所有者本人または管理者が実行でき、スコア移動は送信元プレイヤーの所有者本人だけが実行できます。管理者であっても、所有していないプレイヤーになりすましてスコアを移動することはできません。読み取りAPIは公開しています。認証情報が無効な場合は`401`、認証済みでも権限が不足する場合は`403`を返します。
 
 ## Docker Composeによる実行
 
@@ -432,14 +436,13 @@ Dockerイメージでは不要なファイルと`.env`を除外し、アプリ�
 
 ## 現在の制約
 
-* プレイヤー所有者の記録は実装済みですが、所有者本人だけに削除・スコア移動を許可する制御、およびスコア追加を管理者だけに許可するロールベースの権限制御は未実装です。
+* 初期管理者の作成やユーザーロールを変更する管理APIは未実装であり、現在は信頼されたデータベース管理操作によって管理者へ昇格させます。
 * Docker Composeによる開発用実行環境は構築済みですが、本番環境へのデプロイは未実装です。
 * 本プロジェクトは開発中のポートフォリオであり、本番運用を目的とした完成済みシステムではありません。
 
 ## 今後の予定
 
-* プレイヤー所有者に基づく操作権限の実装
-* 管理者と一般ユーザーを区別するロールベースの権限制御
+* 管理者アカウントとユーザーロールの運用方法の整備
 * 本番環境へのデプロイ方法の整備
 
 
@@ -616,10 +619,12 @@ CREATE DATABASE game_player_service_test;
 python -m alembic upgrade head
 ```
 
-集成测试开始时，`migrated_test_database` fixture 会把连接目标切换到 `game_player_service_test`，并自动执行相同的数据库迁移。主机、端口、用户名和密码继续使用 `.env` 中的配置。第二份迁移为发送者ID和接收者ID添加索引，以提高外键检查和按玩家查询转移历史时的效率。
+项目使用Alembic对PostgreSQL表结构进行版本管理。第一份迁移创建`players`和`transfer_history`，第二份迁移为外键列添加索引，第三份迁移创建保存登录用户的`users`表，第四份迁移添加`players.owner_user_id`及其外键和UNIQUE约束，第五份迁移添加`users.role`，默认值为`user`，并通过CHECK约束只允许`user`或`admin`。
+
+集成测试开始时，`migrated_test_database` fixture 会把连接目标切换到 `game_player_service_test`，并自动执行相同的数据库迁移。主机、端口、用户名和密码继续使用 `.env` 中的配置。迁移链还会依次创建用户表、添加玩家所有权，并添加普通用户与管理员角色。
 
 > [!WARNING]
-> 集成测试会在测试前后清空 `game_player_service_test` 中 `players` 和 `transfer_history` 表内的数据。请勿在该测试数据库中保存重要数据。
+> 集成测试会在测试前后清空`game_player_service_test`中的`transfer_history`、`players`和`users`表。使用Redis的测试还会删除`ranking`缓存键。请勿在测试数据库或共享Redis中保存重要数据。
 
 ### 自动化测试
 
@@ -632,7 +637,7 @@ python -m pytest -m "not integration" -q
 当前结果：
 
 ```text
-149 passed
+163 passed
 ```
 
 使用 PostgreSQL 与 Redis 的 Repository/API 集成测试：
@@ -644,7 +649,7 @@ python -m pytest -m integration -q
 当前结果：
 
 ```text
-73 passed
+78 passed
 ```
 
 执行全部测试：
@@ -656,15 +661,15 @@ python -m pytest -q
 当前结果：
 
 ```text
-222 passed
+241 passed
 ```
 
 ### GitHub Actions CI
 
 `.github/workflows/ci.yml` 会在每次 push 和 pull request 时自动执行：
 
-* `component-tests`：运行不需要 PostgreSQL 的149个测试
-* `integration-tests`：启动 PostgreSQL 17、执行 Alembic 迁移并运行73个集成测试
+* `component-tests`：运行不需要 PostgreSQL 的163个测试
+* `integration-tests`：启动 PostgreSQL 17、执行 Alembic 迁移并运行78个集成测试
 * `docker-build`：确认能够通过 Dockerfile 成功构建 API 镜像
 
 ### 事务设计
@@ -726,15 +731,17 @@ Redis 连接、读取、写入或删除失败，以及缓存中的 JSON 无效�
 
 所有成功响应都配置了响应模型，使 FastAPI 能在返回前检查数据结构，并在 Swagger 中生成明确的 API 说明。
 
-### 用户认证与JWT
+### 用户认证、所有权与角色授权
 
 可以通过`POST /auth/register`注册登录用户。密码首先由Pydantic的`SecretStr`避免在普通输出中暴露，再由UserService转换为Argon2哈希后保存到`users`表。API响应不会包含明文密码或密码哈希。
 
-`POST /auth/token`通过OAuth2密码表单接收用户名和密码，并使用Argon2验证数据库中保存的密码哈希。认证成功后，接口签发带有效期的JWT访问令牌。JWT只保存表示用户名的`sub`和过期时间`exp`，不会包含密码。
+`POST /auth/token`通过OAuth2密码表单接收用户名和密码，并使用Argon2验证数据库中保存的密码哈希。认证成功后，接口签发带有效期的JWT访问令牌。JWT只保存表示用户名的`sub`和过期时间`exp`，不会包含密码或用户角色。
 
 创建玩家时，系统会将通过JWT认证得到的当前登录用户`user_id`自动写入`players.owner_user_id`，客户端不能自行指定`owner_user_id`。外键保证所有者必须是真实存在的用户，UNIQUE约束将每个用户可拥有的玩家限制为一个。为了兼容已有数据，尚未绑定用户的旧玩家可以将`owner_user_id`保留为`NULL`。
 
-创建或删除玩家、增加积分和转移积分时，必须通过`Authorization: Bearer <token>`完成身份认证。查询玩家、排行榜和转移历史等读取接口保持公开。登录信息或访问令牌无效时，API返回带有`WWW-Authenticate: Bearer`响应头的`401`。
+`users.role`保存`user`或`admin`。通过公开注册接口创建的用户固定为`user`，客户端在注册请求中提交`role`时会得到`422`。身份认证时，系统根据JWT中的用户名重新从数据库读取最新的用户信息和角色。
+
+创建玩家允许所有已认证用户执行，增加积分仅允许管理员执行。删除玩家只允许玩家所有者本人或管理员执行，转移积分只允许发送方玩家的所有者本人执行。即使是管理员，也不能冒充自己不拥有的玩家转移积分。读取API保持公开。身份认证失败时返回`401`，身份有效但权限不足时返回`403`。
 
 ### 测试覆盖的代表场景
 
@@ -781,12 +788,11 @@ Docker镜像会排除无关文件和`.env`，并使用非root用户`appuser`运�
 
 ### 当前限制
 
-* 已实现玩家所有者记录，但尚未限制只有所有者本人才能删除玩家或从该玩家转出积分，也尚未实现只有管理员才能增加积分的角色权限控制
+* 尚未实现创建初始管理员或修改用户角色的管理API，目前需要通过可信的数据库管理操作将用户提升为管理员
 * 已完成Docker Compose开发环境，但尚未完成线上部署
 * 当前是持续开发中的作品集项目，不能视为已经完成的生产级系统
 
 ### 后续计划
 
-* 实现基于玩家所有者的操作权限
-* 实现区分管理员与普通用户的角色权限控制
+* 完善管理员账户与用户角色的运用方式
 * 完善线上部署方案

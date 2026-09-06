@@ -16,7 +16,10 @@ from user_repository import UserRepository
 from user_service import UserService
 from token_service import TokenService
 from jwt import InvalidTokenError
-from user_exceptions import InvalidAccessTokenError
+from user_exceptions import (
+    InvalidAccessTokenError,
+    PermissionDeniedError
+)
 
 
 oauth2_scheme = OAuth2PasswordBearer(
@@ -126,5 +129,15 @@ def get_current_user(
     return {
         "user_id": user["user_id"],
         "username": user["username"],
-        "created_at": user["created_at"]
+        "created_at": user["created_at"],
+        "role": user["role"]
     }
+
+
+def require_admin(
+        current_user=Depends(get_current_user)
+):
+    if current_user["role"] != "admin":
+        raise PermissionDeniedError
+
+    return current_user

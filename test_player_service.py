@@ -12,6 +12,15 @@ from player_exceptions import (
     PlayerNotFoundError,
     UnexpectedTransferResultError
 )
+from user_exceptions import PermissionDeniedError
+
+
+PLAYER_OWNER = {
+    "user_id": 1,
+    "username": "player-owner",
+    "created_at": None,
+    "role": "user"
+}
 
 
 class FakeRepository:
@@ -33,7 +42,8 @@ class FakeRepository:
             "player_id": 1,
             "name": "Alice",
             "score": 120,
-            "created_at": None
+            "created_at": None,
+            "owner_user_id": 1
         }
 
     def find_player_by_name(self, name):
@@ -99,7 +109,8 @@ class FakeRepository:
             "player_id": 1,
             "name": name,
             "score": 120,
-            "created_at": None
+            "created_at": None,
+            "owner_user_id": 1
         }
 
     def transfer_score(
@@ -164,7 +175,8 @@ def test_get_player_uses_repository():
         "player_id": 1,
         "name": "Alice",
         "score": 120,
-        "created_at": None
+        "created_at": None,
+        "owner_user_id": 1
     }
 
 def test_create_player_uses_repository():
@@ -223,7 +235,10 @@ def test_delete_player_uses_repository():
     repository = FakeRepository()
     service = PlayerService(repository)
 
-    player = service.delete_player("Alice")
+    player = service.delete_player(
+        "Alice",
+        PLAYER_OWNER
+    )
 
     assert repository.deleted_name == "Alice"
     assert player["name"] == "Alice"
@@ -236,7 +251,8 @@ def test_transfer_score_uses_repository():
     result = service.transfer_score(
         "Alice",
         "Bob",
-        30
+        30,
+        PLAYER_OWNER
     )
 
     assert repository.transfer_request == (
@@ -296,11 +312,17 @@ def test_add_score_missing_player_raises_player_not_found():
 
 def test_delete_missing_player_raises_player_not_found():
     repository = FakeRepository()
-    repository.delete_player_succeeds = False
+    repository.find_player_result = None
+
     service = PlayerService(repository)
 
     with pytest.raises(PlayerNotFoundError):
-        service.delete_player("Cindy")
+        service.delete_player(
+            "Cindy",
+            PLAYER_OWNER
+        )
+
+    assert repository.deleted_name is None
 
 
 def test_delete_restricted_player_raises_business_error():
@@ -309,7 +331,10 @@ def test_delete_restricted_player_raises_business_error():
     service = PlayerService(repository)
 
     with pytest.raises(PlayerDeletionRestrictedError):
-        service.delete_player("Alice")
+        service.delete_player(
+            "Alice",
+            PLAYER_OWNER
+        )
 
 
 @pytest.mark.parametrize(
@@ -341,7 +366,8 @@ def test_transfer_score_converts_results_to_business_errors(
         service.transfer_score(
             "Alice",
             "Bob",
-            30
+            30,
+            PLAYER_OWNER
         )
 
 
@@ -354,7 +380,8 @@ def test_transfer_score_unexpected_result_raises_error():
         service.transfer_score(
             "Alice",
             "Bob",
-            30
+            30,
+            PLAYER_OWNER
         )
 
 
@@ -433,7 +460,10 @@ def test_delete_player_invalidates_ranking_cache():
         ranking_cache=ranking_cache
     )
 
-    service.delete_player("Alice")
+    service.delete_player(
+        "Alice",
+        PLAYER_OWNER
+    )
 
     assert ranking_cache.invalidated is True
 
@@ -449,7 +479,8 @@ def test_transfer_score_invalidates_ranking_cache():
     service.transfer_score(
         "Alice",
         "Bob",
-        30
+        30,
+        PLAYER_OWNER
     )
 
     assert ranking_cache.invalidated is True
@@ -461,6 +492,7 @@ def test_failed_transfer_does_not_invalidate_ranking_cache():
         TransferResult.INSUFFICIENT_SCORE
     )
     ranking_cache = FakeRankingCache()
+
     service = PlayerService(
         repository,
         ranking_cache=ranking_cache
@@ -470,7 +502,8 @@ def test_failed_transfer_does_not_invalidate_ranking_cache():
         service.transfer_score(
             "Alice",
             "Bob",
-            30
+            30,
+            PLAYER_OWNER
         )
 
     assert ranking_cache.invalidated is False
@@ -488,3 +521,154 @@ def test_create_player_assigns_authenticated_user_as_owner():
     assert repository.created_name == "Diana"
     assert repository.created_owner_user_id == 7
     assert player["owner_user_id"] == 7
+
+
+def test_regular_user_cannot_delete_another_users_player():
+    repository = FakeRepository()
+    repository.find_player_result[
+        "owner_user_id"
+    ] = 2
+
+    service = PlayerService(repository)
+
+    current_user = {
+        "user_id": 1,
+        "username": "regular-user",
+        "created_at": None,
+        "role": "user"
+    }
+
+    with pytest.raises(PermissionDeniedError):
+        service.delete_player(
+            "Alice",
+            current_user
+        )
+
+    assert repository.deleted_name is None
+
+
+def test_player_owner_can_delete_own_player():
+    repository = FakeRepository()
+    repository.find_player_result[
+        "owner_user_id"
+    ] = 1
+
+    service = PlayerService(repository)
+
+    current_user = {
+        "user_id": 1,
+        "username": "player-owner",
+        "created_at": None,
+        "role": "user"
+    }
+
+    player = service.delete_player(
+        "Alice",
+        current_user
+    )
+
+    assert repository.deleted_name == "Alice"
+    assert player["name"] == "Alice"
+
+
+def test_admin_can_delete_another_users_player():
+    repository = FakeRepository()
+    repository.find_player_result[
+        "owner_user_id"
+    ] = 2
+
+    service = PlayerService(repository)
+
+    current_user = {
+        "user_id": 1,
+        "username": "admin-user",
+        "created_at": None,
+        "role": "admin"
+    }
+
+    player = service.delete_player(
+        "Alice",
+        current_user
+    )
+
+    assert repository.deleted_name == "Alice"
+    assert player["name"] == "Alice"
+
+
+def test_regular_user_cannot_transfer_from_another_users_player():
+    repository = FakeRepository()
+    repository.find_player_result[
+        "owner_user_id"
+    ] = 2
+
+    service = PlayerService(repository)
+
+    current_user = {
+        "user_id": 1,
+        "username": "regular-user",
+        "created_at": None,
+        "role": "user"
+    }
+
+    with pytest.raises(PermissionDeniedError):
+        service.transfer_score(
+            "Alice",
+            "Bob",
+            30,
+            current_user
+        )
+
+    assert repository.transfer_request is None
+
+
+def test_player_owner_can_transfer_from_own_player():
+    repository = FakeRepository()
+    repository.find_player_result[
+        "owner_user_id"
+    ] = PLAYER_OWNER["user_id"]
+
+    service = PlayerService(repository)
+
+    result = service.transfer_score(
+        "Alice",
+        "Bob",
+        30,
+        PLAYER_OWNER
+    )
+
+    assert repository.transfer_request == (
+        "Alice",
+        "Bob",
+        30
+    )
+    assert result == {
+        "sender": "Alice",
+        "receiver": "Bob",
+        "points": 30
+    }
+
+
+def test_admin_cannot_transfer_from_another_users_player():
+    repository = FakeRepository()
+    repository.find_player_result[
+        "owner_user_id"
+    ] = 2
+
+    service = PlayerService(repository)
+
+    admin_user = {
+        "user_id": 1,
+        "username": "admin-user",
+        "created_at": None,
+        "role": "admin"
+    }
+
+    with pytest.raises(PermissionDeniedError):
+        service.transfer_score(
+            "Alice",
+            "Bob",
+            30,
+            admin_user
+        )
+
+    assert repository.transfer_request is None

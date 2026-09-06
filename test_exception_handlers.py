@@ -12,7 +12,10 @@ from player_exceptions import (
     PlayerNotFoundError,
     UnexpectedTransferResultError,
 )
-from user_exceptions import InvalidAccessTokenError
+from user_exceptions import (
+    InvalidAccessTokenError,
+    PermissionDeniedError
+)
 
 
 def test_player_not_found_error_returns_404():
@@ -157,3 +160,21 @@ def test_invalid_access_token_returns_unauthorized():
         response.headers["www-authenticate"]
         == "Bearer"
     )
+
+
+def test_permission_denied_error_returns_forbidden():
+    app = FastAPI()
+    register_exception_handlers(app)
+
+    @app.get("/permission-denied")
+    def raise_permission_denied():
+        raise PermissionDeniedError
+
+    client = TestClient(app)
+
+    response = client.get("/permission-denied")
+
+    assert response.status_code == 403
+    assert response.json() == {
+        "detail": "Permission denied"
+    }

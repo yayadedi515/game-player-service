@@ -3,6 +3,7 @@ from pathlib import Path
 import pytest
 from alembic.config import Config
 from alembic.script import ScriptDirectory
+from psycopg.errors import CheckViolation
 
 from database import get_connection
 
@@ -78,6 +79,7 @@ def test_users_table_has_required_columns():
         "user_id",
         "username",
         "password_hash",
+        "role",
         "created_at"
     }
 
@@ -151,3 +153,66 @@ def test_each_user_can_own_at_most_one_player():
             row = cursor.fetchone()
 
     assert row == ("owner_user_id",)
+
+
+def test_users_have_role_column():
+    with get_connection() as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT data_type, is_nullable
+                FROM information_schema.columns
+                WHERE table_schema = 'public'
+                  AND table_name = 'users'
+                  AND column_name = 'role'
+                """
+            )
+            row = cursor.fetchone()
+
+    assert row == (
+        "character varying",
+        "NO"
+    )
+
+
+def test_new_user_defaults_to_user_role():
+    with get_connection() as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                INSERT INTO users (
+                    username,
+                    password_hash
+                )
+                VALUES (%s, %s)
+                RETURNING role
+                """,
+                (
+                    "default-role-user",
+                    "test-password-hash"
+                )
+            )
+            row = cursor.fetchone()
+
+    assert row == ("user",)
+
+
+def test_users_reject_invalid_role():
+    with pytest.raises(CheckViolation):
+        with get_connection() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    INSERT INTO users (
+                        username,
+                        password_hash,
+                        role
+                    )
+                    VALUES (%s, %s, %s)
+                    """,
+                    (
+                        "invalid-role-user",
+                        "test-password-hash",
+                        "superuser"
+                    )
+                )

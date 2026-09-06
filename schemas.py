@@ -41,6 +41,10 @@ UserPassword = Annotated[
 
 
 class UserRegister(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid"
+    )
+
     username: UserName
     password: UserPassword
 

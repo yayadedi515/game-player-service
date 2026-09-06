@@ -16,6 +16,7 @@ from dependencies import (
     get_user_service,
     get_token_service,
     get_current_user,
+    require_admin,
 )
 from player_service import PlayerService
 from player_repository import PlayerRepository
@@ -26,6 +27,8 @@ from user_repository import UserRepository
 from user_service import UserService
 from password_hasher_protocol import PasswordHasherProtocol
 from user_repository_protocol import UserRepositoryProtocol
+from user_exceptions import PermissionDeniedError
+
 
 class FakeSettings:
     redis_host = "cache"
@@ -174,7 +177,8 @@ def test_get_current_user_decodes_token_and_loads_user():
                 "user_id": 1,
                 "username": "aooshiro",
                 "password_hash": "stored-password-hash",
-                "created_at": None
+                "created_at": None,
+                "role": "user",
             }
 
     token_service = FakeTokenService()
@@ -197,7 +201,8 @@ def test_get_current_user_decodes_token_and_loads_user():
     assert user == {
         "user_id": 1,
         "username": "aooshiro",
-        "created_at": None
+        "created_at": None,
+        "role": "user"
     }
     assert "password_hash" not in user
 
@@ -238,3 +243,28 @@ def test_get_current_user_rejects_missing_user():
             FakeTokenService(),
             FakeUserRepository()
         )
+
+
+def test_require_admin_returns_admin_user():
+    current_user = {
+        "user_id": 1,
+        "username": "admin-user",
+        "created_at": None,
+        "role": "admin"
+    }
+
+    result = require_admin(current_user)
+
+    assert result is current_user
+
+
+def test_require_admin_rejects_regular_user():
+    current_user = {
+        "user_id": 2,
+        "username": "regular-user",
+        "created_at": None,
+        "role": "user"
+    }
+
+    with pytest.raises(PermissionDeniedError):
+        require_admin(current_user)

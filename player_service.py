@@ -14,6 +14,7 @@ from player_exceptions import (
     DuplicatePlayerError,
     PlayerNotFoundError,
 )
+from user_exceptions import PermissionDeniedError
 
 
 class PlayerService:
@@ -86,7 +87,27 @@ class PlayerService:
 
         return player
 
-    def delete_player(self, name):
+    def delete_player(
+            self,
+            name,
+            current_user
+    ):
+        existing_player = (
+            self.repository.find_player_by_name(name)
+        )
+
+        if existing_player is None:
+            raise PlayerNotFoundError
+
+        is_admin = current_user["role"] == "admin"
+        is_owner = (
+                existing_player["owner_user_id"]
+                == current_user["user_id"]
+        )
+
+        if not is_admin and not is_owner:
+            raise PermissionDeniedError
+
         try:
             player = self.repository.delete_player(name)
         except (
@@ -107,10 +128,24 @@ class PlayerService:
             self,
             sender,
             receiver,
-            points
+            points,
+            current_user
     ):
         cleaned_sender = sender.strip()
         cleaned_receiver = receiver.strip()
+
+        sender_player = (
+            self.repository.find_player_by_name(sender)
+        )
+
+        if sender_player is None:
+            raise PlayerNotFoundError
+
+        if (
+                sender_player["owner_user_id"]
+                != current_user["user_id"]
+        ):
+            raise PermissionDeniedError
 
         result = self.repository.transfer_score(
             cleaned_sender,

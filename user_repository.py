@@ -23,7 +23,8 @@ class UserRepository:
                 user_id,
                 username,
                 password_hash,
-                created_at
+                created_at,
+                role
         """
 
         with get_connection() as connection:
@@ -44,7 +45,8 @@ class UserRepository:
             "user_id": row[0],
             "username": row[1],
             "password_hash": row[2],
-            "created_at": row[3]
+            "created_at": row[3],
+            "role": row[4]
         }
 
     def find_user_by_username(
@@ -61,7 +63,8 @@ class UserRepository:
                 user_id,
                 username,
                 password_hash,
-                created_at
+                created_at,
+                role
             FROM users
             WHERE username = %s
         """
@@ -81,5 +84,6 @@ class UserRepository:
             "user_id": row[0],
             "username": row[1],
             "password_hash": row[2],
-            "created_at": row[3]
+            "created_at": row[3],
+            "role": row[4]
         }

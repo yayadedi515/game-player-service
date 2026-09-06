@@ -54,7 +54,11 @@ class FakeService:
             )
         )
 
-    def delete_player(self, name):
+    def delete_player(
+            self,
+            name,
+            current_user
+    ):
         cleaned_name = name.strip()
 
         if cleaned_name == "":
@@ -115,7 +119,13 @@ class FakeService:
         player["score"] += points
         return player
 
-    def transfer_score(self, sender, receiver, points):
+    def transfer_score(
+            self,
+            sender,
+            receiver,
+            points,
+            current_user
+    ):
         self.transfer_score_call_count += 1
         if self.unexpected_transfer_result:
             raise UnexpectedTransferResultError
@@ -189,7 +199,8 @@ def fake_service():
     ] = lambda: {
         "user_id": 1,
         "username": "test-user",
-        "created_at": None
+        "created_at": None,
+        "role": "admin"
     }
 
     try:

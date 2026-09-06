@@ -280,3 +280,124 @@ def test_user_cannot_create_second_player():
             row = cursor.fetchone()
 
     assert row[0] == 1
+
+
+def test_database_role_controls_admin_permission():
+    register_response = client.post(
+        "/auth/register",
+        json={
+            "username": "role-test-user",
+            "password": "test-password-123!"
+        }
+    )
+
+    assert register_response.status_code == 201
+
+    login_response = client.post(
+        "/auth/token",
+        data={
+            "username": "role-test-user",
+            "password": "test-password-123!"
+        }
+    )
+
+    assert login_response.status_code == 200
+
+    access_token = (
+        login_response.json()["access_token"]
+    )
+
+    authorization_headers = {
+        "Authorization": (
+            f"Bearer {access_token}"
+        )
+    }
+
+    player_response = client.post(
+        "/players",
+        headers=authorization_headers,
+        json={
+            "name": "Diana"
+        }
+    )
+
+    assert player_response.status_code == 201
+
+    forbidden_response = client.patch(
+        "/players/Diana/score",
+        headers=authorization_headers,
+        json={
+            "points": 30
+        }
+    )
+
+    assert forbidden_response.status_code == 403
+    assert forbidden_response.json() == {
+        "detail": "Permission denied"
+    }
+
+    with get_connection() as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                UPDATE users
+                SET role = %s
+                WHERE username = %s
+                """,
+                (
+                    "admin",
+                    "role-test-user"
+                )
+            )
+
+            assert cursor.rowcount == 1
+
+    allowed_response = client.patch(
+        "/players/Diana/score",
+        headers=authorization_headers,
+        json={
+            "points": 30
+        }
+    )
+
+    assert allowed_response.status_code == 200
+    assert allowed_response.json() == {
+        "name": "Diana",
+        "score": 30
+    }
+
+
+def test_registration_rejects_client_supplied_admin_role():
+    response = client.post(
+        "/auth/register",
+        json={
+            "username": "self-admin-user",
+            "password": "test-password-123!",
+            "role": "admin"
+        }
+    )
+
+    assert response.status_code == 422
+
+    detail = response.json()["detail"]
+
+    assert detail[0]["loc"] == [
+        "body",
+        "role"
+    ]
+    assert detail[0]["type"] == "extra_forbidden"
+
+    with get_connection() as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT COUNT(*)
+                FROM users
+                WHERE username = %s
+                """,
+                ("self-admin-user",)
+            )
+            row = cursor.fetchone()
+
+    assert row is not None
+    assert row[0] == 0

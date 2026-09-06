@@ -13,7 +13,8 @@ from player_exceptions import (
 from user_exceptions import (
     DuplicateUserError,
     InvalidAccessTokenError,
-    InvalidCredentialsError
+    InvalidCredentialsError,
+    PermissionDeniedError
 )
 
 
@@ -53,6 +54,10 @@ BUSINESS_ERROR_RESPONSES = {
     InvalidAccessTokenError: (
         401,
         "Could not validate credentials"
+    ),
+    PermissionDeniedError: (
+        403,
+        "Permission denied"
     ),
 }
 

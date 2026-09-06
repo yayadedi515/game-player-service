@@ -30,35 +30,59 @@ def provide_authenticated_user(
                 """
                 INSERT INTO users (
                     username,
-                    password_hash
+                    password_hash,
+                    role
                 )
-                VALUES (%s, %s)
+                VALUES (%s, %s, %s)
                 RETURNING user_id
                 """,
                 (
                     "integration-user",
-                    "test-password-hash"
+                    "test-password-hash",
+                    "admin"
                 )
             )
             row = cursor.fetchone()
+            assert row is not None
 
-    user_id = row[0]
+            user_id = row[0]
 
     app.dependency_overrides[
         dependencies.get_current_user
     ] = lambda: {
         "user_id": user_id,
         "username": "integration-user",
-        "created_at": None
+        "created_at": None,
+        "role": "admin"
     }
 
     try:
-        yield
+        yield user_id
     finally:
         app.dependency_overrides.pop(
             dependencies.get_current_user,
             None
         )
+
+def assign_player_owner(
+        player_name,
+        owner_user_id
+):
+    with get_connection() as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                UPDATE players
+                SET owner_user_id = %s
+                WHERE name = %s
+                """,
+                (
+                    owner_user_id,
+                    player_name
+                )
+            )
+
+            assert cursor.rowcount == 1
 
 
 def test_get_player_from_postgresql():
@@ -184,12 +208,18 @@ def test_add_score_persists_to_postgresql():
     }
 
 
-def test_transfer_score_persists_to_postgresql():
-    create_response = client.post(
-        "/players",
-        json={"name": "Bob"}
+def test_transfer_score_persists_to_postgresql(
+        provide_authenticated_user
+):
+    bob = repository.create_player("Bob")
+
+    assert bob is not None
+    assert bob["owner_user_id"] is None
+
+    assign_player_owner(
+        "Alice",
+        provide_authenticated_user
     )
-    assert create_response.status_code == 201
 
     transfer_response = client.post(
         "/transfers",
@@ -223,12 +253,18 @@ def test_transfer_score_persists_to_postgresql():
     }
 
 
-def test_transfer_score_insufficient_score_returns_conflict_from_postgresql():
-    create_response = client.post(
-        "/players",
-        json={"name": "Bob"}
+def test_transfer_score_insufficient_score_returns_conflict_from_postgresql(
+        provide_authenticated_user
+):
+    bob = repository.create_player("Bob")
+
+    assert bob is not None
+    assert bob["owner_user_id"] is None
+
+    assign_player_owner(
+        "Alice",
+        provide_authenticated_user
     )
-    assert create_response.status_code == 201
 
     transfer_response = client.post(
         "/transfers",
@@ -244,8 +280,12 @@ def test_transfer_score_insufficient_score_returns_conflict_from_postgresql():
         "detail": "Insufficient score"
     }
 
-    alice_response = client.get("/players/Alice")
-    bob_response = client.get("/players/Bob")
+    alice_response = client.get(
+        "/players/Alice"
+    )
+    bob_response = client.get(
+        "/players/Bob"
+    )
 
     assert alice_response.status_code == 200
     assert bob_response.status_code == 200
@@ -261,21 +301,17 @@ def test_transfer_score_insufficient_score_returns_conflict_from_postgresql():
 
 
 def test_get_transfer_history_from_postgresql():
-    create_response = client.post(
-        "/players",
-        json={"name": "Bob"}
-    )
-    assert create_response.status_code == 201
+    bob = repository.create_player("Bob")
 
-    transfer_response = client.post(
-        "/transfers",
-        json={
-            "sender": "Alice",
-            "receiver": "Bob",
-            "points": 30
-        }
+    assert bob is not None
+
+    result = repository.transfer_score(
+        "Alice",
+        "Bob",
+        30
     )
-    assert transfer_response.status_code == 201
+
+    assert result is TransferResult.SUCCESS
 
     response = client.get("/transfers")
 
@@ -292,11 +328,9 @@ def test_get_transfer_history_from_postgresql():
 
 
 def test_get_transfer_history_pagination_from_postgresql():
-    create_response = client.post(
-        "/players",
-        json={"name": "Bob"}
-    )
-    assert create_response.status_code == 201
+    bob = repository.create_player("Bob")
+
+    assert bob is not None
 
     transfers = [
         {
@@ -317,11 +351,13 @@ def test_get_transfer_history_pagination_from_postgresql():
     ]
 
     for transfer in transfers:
-        response = client.post(
-            "/transfers",
-            json=transfer
+        result = repository.transfer_score(
+            transfer["sender"],
+            transfer["receiver"],
+            transfer["points"]
         )
-        assert response.status_code == 201
+
+        assert result is TransferResult.SUCCESS
 
     response = client.get(
         "/transfers?limit=1&offset=1"
