@@ -35,6 +35,7 @@ class FakeSettings:
     redis_port = 6380
     ranking_cache_ttl_seconds = 120
     redis_timeout_seconds = 0.5
+    redis_url = None
 
 
 def test_get_player_repository_returns_player_repository():
@@ -86,6 +87,42 @@ def test_get_redis_client_uses_provided_settings():
     assert (
             connection_settings["retry"].get_retries()
             == 0
+    )
+
+
+def test_get_redis_client_prefers_redis_url():
+    class FakeRedisUrlSettings:
+        redis_url = SecretStr(
+            "redis://default:"
+            "test-password@railway-cache:6380/0"
+        )
+        redis_host = "fallback-cache"
+        redis_port = 6379
+        redis_timeout_seconds = 0.5
+
+    redis_client = get_redis_client(
+        FakeRedisUrlSettings()
+    )
+
+    connection_settings = (
+        redis_client
+        .connection_pool
+        .connection_kwargs
+    )
+
+    assert (
+        connection_settings["host"]
+        == "railway-cache"
+    )
+    assert connection_settings["port"] == 6380
+    assert connection_settings["username"] == "default"
+    assert (
+        connection_settings["password"]
+        == "test-password"
+    )
+    assert (
+        connection_settings["decode_responses"]
+        is True
     )
 
 

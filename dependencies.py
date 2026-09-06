@@ -32,20 +32,30 @@ def get_player_repository():
 
 
 def get_redis_client(settings=Depends(get_settings)):
-    return Redis(
-        host=settings.redis_host,
-        port=settings.redis_port,
-        decode_responses=True,
-        socket_connect_timeout=(
+    connection_options = {
+        "decode_responses": True,
+        "socket_connect_timeout": (
             settings.redis_timeout_seconds
         ),
-        socket_timeout=(
+        "socket_timeout": (
             settings.redis_timeout_seconds
         ),
-        retry=Retry(
+        "retry": Retry(
             NoBackoff(),
             0
         )
+    }
+
+    if settings.redis_url is not None:
+        return Redis.from_url(
+            settings.redis_url.get_secret_value(),
+            **connection_options
+        )
+
+    return Redis(
+        host=settings.redis_host,
+        port=settings.redis_port,
+        **connection_options
     )
 
 

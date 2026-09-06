@@ -2,7 +2,10 @@ from settings import Settings, get_settings
 from functools import lru_cache
 
 import pytest
-from pydantic import ValidationError
+from pydantic import (
+    SecretStr,
+    ValidationError
+)
 
 def test_settings_reads_application_environment(
         monkeypatch
@@ -209,3 +212,33 @@ def test_settings_reads_jwt_configuration(
         == "test-only-jwt-secret-key-123456789"
     )
     assert settings.access_token_expire_minutes == 45
+
+
+def test_settings_accepts_optional_redis_url():
+    settings = Settings(
+        db_host="database",
+        db_port=5432,
+        db_name="test_database",
+        db_user="postgres",
+        db_password="secret",
+        jwt_secret_key=(
+            "test-only-jwt-secret-key-123456789"
+        ),
+        redis_url=(
+            "redis://default:"
+            "test-password@cache:6380/0"
+        ),
+        _env_file=None
+    )
+
+    assert isinstance(
+        settings.redis_url,
+        SecretStr
+    )
+    assert (
+        settings.redis_url.get_secret_value()
+        == (
+            "redis://default:"
+            "test-password@cache:6380/0"
+        )
+    )

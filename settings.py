@@ -28,6 +28,7 @@ class Settings(BaseSettings):
         ge=1,
         le=1440
     )
+    redis_url: SecretStr | None = None
     redis_host: str = Field(
         default="localhost",
         min_length=1
