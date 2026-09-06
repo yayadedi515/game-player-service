@@ -8,7 +8,11 @@ class PlayerRepositoryProtocol(Protocol):
     def find_player_by_name(self, name: str) -> dict | None:
         ...
 
-    def create_player(self, name: str) -> dict | None:
+    def create_player(
+            self,
+            name: str,
+            owner_user_id: int | None = None
+    ) -> dict | None:
         ...
 
     def add_score(self, name: str, score: int) -> dict | None:

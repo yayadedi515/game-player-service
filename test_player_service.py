@@ -28,6 +28,7 @@ class FakeRepository:
         self.delete_player_succeeds = True
         self.delete_player_restricted = False
         self.transfer_result = TransferResult.SUCCESS
+        self.created_owner_user_id = None
         self.find_player_result = {
             "player_id": 1,
             "name": "Alice",
@@ -39,8 +40,13 @@ class FakeRepository:
         self.requested_name = name
         return self.find_player_result
 
-    def create_player(self, name):
+    def create_player(
+            self,
+            name,
+            owner_user_id=None
+    ):
         self.created_name = name
+        self.created_owner_user_id = owner_user_id
 
         if not self.create_player_succeeds:
             return None
@@ -49,7 +55,8 @@ class FakeRepository:
             "player_id": 2,
             "name": name,
             "score": 0,
-            "created_at": None
+            "created_at": None,
+            "owner_user_id": owner_user_id
         }
 
     def get_ranking(self):
@@ -467,3 +474,17 @@ def test_failed_transfer_does_not_invalidate_ranking_cache():
         )
 
     assert ranking_cache.invalidated is False
+
+
+def test_create_player_assigns_authenticated_user_as_owner():
+    repository = FakeRepository()
+    service = PlayerService(repository)
+
+    player = service.create_player(
+        "Diana",
+        owner_user_id=7
+    )
+
+    assert repository.created_name == "Diana"
+    assert repository.created_owner_user_id == 7
+    assert player["owner_user_id"] == 7

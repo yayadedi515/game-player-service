@@ -5,6 +5,8 @@ from fastapi.testclient import TestClient
 from main import app
 from player_repository import PlayerRepository
 from transfer_result import TransferResult
+from database import get_connection
+
 
 pytestmark = [
     pytest.mark.integration,
@@ -19,11 +21,33 @@ repository = PlayerRepository()
 
 
 @pytest.fixture(autouse=True)
-def provide_authenticated_user():
+def provide_authenticated_user(
+        reset_test_database
+):
+    with get_connection() as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                INSERT INTO users (
+                    username,
+                    password_hash
+                )
+                VALUES (%s, %s)
+                RETURNING user_id
+                """,
+                (
+                    "integration-user",
+                    "test-password-hash"
+                )
+            )
+            row = cursor.fetchone()
+
+    user_id = row[0]
+
     app.dependency_overrides[
         dependencies.get_current_user
     ] = lambda: {
-        "user_id": 1,
+        "user_id": user_id,
         "username": "integration-user",
         "created_at": None
     }
@@ -69,14 +93,8 @@ def test_create_player_in_postgresql():
 
 
 def test_get_ranking_from_postgresql():
-    client.post(
-        "/players",
-        json={"name": "Charlie"}
-    )
-    client.post(
-        "/players",
-        json={"name": "Bob"}
-    )
+    repository.create_player("Charlie")
+    repository.create_player("Bob")
 
     response = client.get("/ranking")
 

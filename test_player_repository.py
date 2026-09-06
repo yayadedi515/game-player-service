@@ -598,3 +598,43 @@ def test_get_transfer_history_rejects_invalid_pagination(
             limit=limit,
             offset=offset
         )
+
+
+def test_create_player_assigns_owner():
+    with get_connection() as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                INSERT INTO users (username, password_hash)
+                VALUES (%s, %s)
+                RETURNING user_id
+                """,
+                (
+                    "test-owner",
+                    "test-password-hash"
+                )
+            )
+            row = cursor.fetchone()
+
+    owner_user_id = row[0]
+
+    player = repository.create_player(
+        "Diana",
+        owner_user_id
+    )
+
+    assert player["owner_user_id"] == owner_user_id
+
+    with get_connection() as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT owner_user_id
+                FROM players
+                WHERE name = %s
+                """,
+                ("Diana",)
+            )
+            stored_row = cursor.fetchone()
+
+    assert stored_row == (owner_user_id,)

@@ -16,11 +16,18 @@ class FakePlayerService:
     def __init__(self):
         self.created_name = None
 
-    def create_player(self, name):
+    def create_player(
+            self,
+            name,
+            owner_user_id=None
+    ):
         self.created_name = name
         return {
+            "player_id": 1,
             "name": name,
-            "score": 0
+            "score": 0,
+            "created_at": None,
+            "owner_user_id": owner_user_id
         }
 
 

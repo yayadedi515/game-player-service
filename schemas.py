@@ -7,6 +7,7 @@ from pydantic import (
     StringConstraints,
     model_validator,
     SecretStr,
+    ConfigDict,
 )
 
 
@@ -54,6 +55,10 @@ class TokenResponse(BaseModel):
 
 
 class PlayerCreate(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid"
+    )
+
     name: PlayerName
 
 

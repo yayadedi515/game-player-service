@@ -22,6 +22,7 @@ class FakeService:
     def __init__(self):
         self.transfer_score_call_count = 0
         self.get_transfer_history_call_count = 0
+        self.created_owner_user_id = None
         self.players = {
             "Alice": {
                 "player_id": 1,
@@ -78,7 +79,12 @@ class FakeService:
 
         return player
 
-    def create_player(self, name):
+    def create_player(
+            self,
+            name,
+            owner_user_id=None
+    ):
+        self.created_owner_user_id = owner_user_id
         cleaned_name = name.strip()
 
         if cleaned_name == "" or cleaned_name in self.players:
@@ -242,13 +248,14 @@ def test_get_ranking(fake_service):
     }
 
 
-def test_create_player():
+def test_create_player(fake_service):
     response = client.post(
         "/players",
         json={"name": "Cindy"}
     )
 
     assert response.status_code == 201
+    assert fake_service.created_owner_user_id == 1
     assert response.json() == {"name": "Cindy", "score": 0}
 
     new_response = client.get("/players/Cindy")
@@ -841,3 +848,23 @@ def test_openapi_groups_routes_by_domain():
     assert schema["paths"]["/transfers"]["post"]["tags"] == [
         "Transfers"
     ]
+
+
+def test_create_player_rejects_owner_user_id_from_request():
+    response = client.post(
+        "/players",
+        json={
+            "name": "Cindy",
+            "owner_user_id": 999
+        }
+    )
+
+    assert response.status_code == 422
+
+    detail = response.json()["detail"]
+
+    assert detail[0]["loc"] == [
+        "body",
+        "owner_user_id"
+    ]
+    assert detail[0]["type"] == "extra_forbidden"

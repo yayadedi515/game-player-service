@@ -53,10 +53,11 @@ def get_ranking(
 def create_player(
         player: PlayerCreate,
         service=Depends(get_player_service),
-        _current_user=Depends(get_current_user)
+        current_user=Depends(get_current_user)
 ):
     created_player = service.create_player(
-        player.name
+        player.name,
+        current_user["user_id"]
     )
 
     return {

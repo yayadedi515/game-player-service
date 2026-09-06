@@ -11,7 +11,7 @@ def _find_player_by_name(name: str) -> dict | None:
         return None
 
     query = """
-        SELECT player_id, name, score, created_at
+        SELECT player_id, name, score, created_at, owner_user_id
         FROM players
         WHERE name = %s
     """
@@ -28,30 +28,45 @@ def _find_player_by_name(name: str) -> dict | None:
         "player_id": row[0],
         "name": row[1],
         "score": row[2],
-        "created_at": row[3]
+        "created_at": row[3],
+        "owner_user_id": row[4]
     }
 
 
-def _create_player(name: str) -> dict | None:
+def _create_player(
+        name: str,
+        owner_user_id: int | None = None
+) -> dict | None:
     cleaned_name = name.strip()
 
     if cleaned_name == "":
         return None
 
     query = """
-        INSERT INTO players (name)
-        VALUES (%s)
-        RETURNING player_id, name, score, created_at
+        INSERT INTO players (
+            name,
+            owner_user_id
+        )
+        VALUES (%s, %s)
+        ON CONFLICT DO NOTHING
+        RETURNING
+            player_id,
+            name,
+            score,
+            created_at,
+            owner_user_id
     """
 
-    try:
-        with get_connection() as connection:
-            with connection.cursor() as cursor:
-                cursor.execute(query, (cleaned_name,))
-                row = cursor.fetchone()
-
-    except UniqueViolation:
-        return None
+    with get_connection() as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                query,
+                (
+                    cleaned_name,
+                    owner_user_id
+                )
+            )
+            row = cursor.fetchone()
 
     if row is None:
         return None
@@ -60,7 +75,8 @@ def _create_player(name: str) -> dict | None:
         "player_id": row[0],
         "name": row[1],
         "score": row[2],
-        "created_at": row[3]
+        "created_at": row[3],
+        "owner_user_id": row[4]
     }
 
 
@@ -74,7 +90,7 @@ def _add_score(name: str, score: int) -> dict | None:
         UPDATE players
         SET score = score + %s
         WHERE name = %s
-        RETURNING player_id, name, score, created_at
+        RETURNING player_id, name, score, created_at, owner_user_id
     """
 
     with get_connection() as connection:
@@ -89,13 +105,14 @@ def _add_score(name: str, score: int) -> dict | None:
         "player_id": row[0],
         "name": row[1],
         "score": row[2],
-        "created_at": row[3]
+        "created_at": row[3],
+        "owner_user_id": row[4]
     }
 
 
 def _get_ranking() -> list[dict]:
     query = """
-        SELECT player_id, name, score, created_at
+        SELECT player_id, name, score, created_at, owner_user_id
         FROM players
         ORDER BY score DESC, name ASC
     """
@@ -111,7 +128,8 @@ def _get_ranking() -> list[dict]:
                 "player_id": row[0],
                 "name": row[1],
                 "score": row[2],
-                "created_at": row[3]
+                "created_at": row[3],
+                "owner_user_id": row[4]
             })
         return result
 
@@ -256,7 +274,7 @@ def _delete_player(name: str) -> dict | None:
     query = """
         DELETE FROM players
         WHERE name = %s
-        RETURNING player_id, name, score, created_at
+        RETURNING player_id, name, score, created_at, owner_user_id
     """
 
     with get_connection() as connection:
@@ -271,7 +289,8 @@ def _delete_player(name: str) -> dict | None:
         "player_id": row[0],
         "name": row[1],
         "score": row[2],
-        "created_at": row[3]
+        "created_at": row[3],
+        "owner_user_id": row[4]
     }
 
 
@@ -279,8 +298,15 @@ class PlayerRepository:
     def find_player_by_name(self, name):
         return _find_player_by_name(name)
 
-    def create_player(self, name):
-        return _create_player(name)
+    def create_player(
+            self,
+            name,
+            owner_user_id=None
+    ):
+        return _create_player(
+            name,
+            owner_user_id
+        )
 
     def add_score(self, name, score):
         return _add_score(name, score)

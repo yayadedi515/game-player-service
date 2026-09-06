@@ -33,8 +33,15 @@ class PlayerService:
 
         return player
 
-    def create_player(self, name):
-        player = self.repository.create_player(name)
+    def create_player(
+            self,
+            name,
+            owner_user_id: int | None = None
+    ):
+        player = self.repository.create_player(
+            name,
+            owner_user_id
+        )
 
         if player is None:
             raise DuplicatePlayerError

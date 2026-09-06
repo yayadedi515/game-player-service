@@ -70,18 +70,18 @@ HTTP → FastAPI → PlayerService → PostgreSQL Repository → Psycopg → Pos
 
 プレイヤー情報はPostgreSQLの`players`テーブルに保存されます。FastAPI起動時にサンプルプレイヤーは自動登録されません。
 
-| Method   | Endpoint          | 説明       |
-| -------- | ----------------- | -------- |
-| `GET`    | `/health`         | ヘルスチェック  |
-| `GET`    | `/players/{name}` | プレイヤーの取得 |
-| `GET`    | `/ranking`        | ランキングの取得 |
-| `POST`   | `/players`        | プレイヤーの作成 |
-| `DELETE` | `/players/{name}` | プレイヤーの削除 |
-| `PATCH`  | `/players/{name}/score` | スコアの追加 |
-| `POST`   | `/transfers`             | スコアの移動 |
-| `GET`    | `/transfers`             | 移動履歴の取得（ページング対応） |
-| `POST` | `/auth/register` | ログインユーザーの登録 |
-| `POST` | `/auth/token` | ログインとJWTアクセストークンの発行 |
+| Method   | Endpoint                  | 説明                             | 認証         |
+|----------|---------------------------|----------------------------------|--------------|
+| `GET`    | `/health`                 | ヘルスチェック                   | 不要         |
+| `GET`    | `/players/{name}`         | プレイヤーの取得                 | 不要         |
+| `GET`    | `/ranking`                | ランキングの取得                 | 不要         |
+| `POST`   | `/players`                | プレイヤーの作成                 | Bearer Token |
+| `DELETE` | `/players/{name}`         | プレイヤーの削除                 | Bearer Token |
+| `PATCH`  | `/players/{name}/score`   | スコアの追加                     | Bearer Token |
+| `POST`   | `/transfers`              | スコアの移動                     | Bearer Token |
+| `GET`    | `/transfers`              | 移動履歴の取得（ページング対応） | 不要         |
+| `POST`   | `/auth/register`          | ログインユーザーの登録           | 不要         |
+| `POST`   | `/auth/token`             | ログインとJWTアクセストークン発行 | 不要         |
 
 プレイヤー作成リクエストの例：
 
@@ -210,7 +210,7 @@ python -m pytest -m "not integration" -q
 実行結果：
 
 ```text
-147 passed
+149 passed
 ```
 
 PostgreSQL・Redisを使用するRepository・API統合テスト：
@@ -222,7 +222,7 @@ python -m pytest -m integration -q
 実行結果：
 
 ```text
-68 passed
+73 passed
 ```
 
 全テスト：
@@ -234,7 +234,7 @@ python -m pytest -q
 現在の実行結果：
 
 ```text
-215 passed
+222 passed
 ```
 
 統合テストには、意図的にPostgreSQLの整数上限超過を発生させるテストが含まれています。スコアの加算処理が途中で失敗した場合でも、送信者の減算、受信者の加算、移動履歴の追加がすべてロールバックされることを確認しています。
@@ -243,78 +243,82 @@ python -m pytest -q
 
 `.github/workflows/ci.yml`により、pushおよびpull requestのたびに次の処理を自動実行します。
 
-* `component-tests`：PostgreSQLを使用しない147件のテスト
-* `integration-tests`：PostgreSQL 17の起動、Alembicマイグレーション、68件の統合テスト
+* `component-tests`：PostgreSQLを使用しない149件のテスト
+* `integration-tests`：PostgreSQL 17の起動、Alembicマイグレーション、73件の統合テスト
 * `docker-build`：DockerfileからAPIイメージを構築できることの確認
 
 ## プロジェクト構成
 
 ```text
 .
-├── Dockerfile
-├── .dockerignore
 ├── .github/
 │   └── workflows/
 │       └── ci.yml
-├── main.py
-├── compose.yaml
-├── app_factory.py
-├── dependencies.py
 ├── routers/
 │   ├── __init__.py
 │   ├── auth.py
 │   ├── health.py
 │   ├── players.py
 │   └── transfers.py
-├── password_hasher.py
-├── password_hasher_protocol.py
-├── user_service.py
-├── user_repository.py
-├── user_repository_protocol.py
-├── user_exceptions.py
-├── schemas.py
-├── player_service.py
-├── legacy_player_service.py
-├── player_exceptions.py
-├── player_repository_protocol.py
-├── player_repository.py
-├── exception_handlers.py
-├── settings.py
-├── ranking_cache.py
-├── ranking_cache_protocol.py
-├── database.py
-├── alembic.ini
 ├── migrations/
 │   ├── README
 │   ├── env.py
 │   ├── script.py.mako
 │   └── versions/
-│       └── 019dd3348d7e_create_players_and_transfer_history_.py
-│       └── 8823f987778c_add_transfer_history_foreign_key_indexes.py
-│       └── b0aae66c3618_create_users_table.py
+│       ├── 019dd3348d7e_create_players_and_transfer_history_.py
+│       ├── 8823f987778c_add_transfer_history_foreign_key_indexes.py
+│       ├── b0aae66c3618_create_users_table.py
+│       └── 6c3a3c901882_add_player_ownership.py
+├── main.py
+├── app_factory.py
+├── dependencies.py
+├── schemas.py
+├── exception_handlers.py
+├── player_service.py
+├── player_repository.py
+├── player_repository_protocol.py
+├── player_exceptions.py
+├── user_service.py
+├── user_repository.py
+├── user_repository_protocol.py
+├── user_exceptions.py
+├── password_hasher.py
+├── password_hasher_protocol.py
+├── token_service.py
+├── token_service_protocol.py
+├── ranking_cache.py
+├── ranking_cache_protocol.py
+├── database.py
+├── alembic.ini
+├── Dockerfile
+├── compose.yaml
+├── .dockerignore
+├── .env.example
 ├── test_main.py
 ├── test_main_integration.py
-├── test_player_service.py
-├── test_legacy_player_service.py
-├── test_player_repository.py
 ├── test_app_factory.py
+├── test_authorization.py
 ├── test_auth_router.py
 ├── test_auth_integration.py
-├── test_password_hasher.py
+├── test_player_service.py
+├── test_player_repository.py
+├── test_user_service.py
 ├── test_user_repository.py
 ├── test_user_schemas.py
-├── test_user_service.py
+├── test_password_hasher.py
+├── test_token_service.py
+├── test_ranking_cache.py
 ├── test_dependencies.py
-├── test_health_router.py
 ├── test_exception_handlers.py
+├── test_health_router.py
 ├── test_settings.py
 ├── test_database.py
 ├── test_migrations.py
-├── test_ranking_cache.py
+├── test_legacy_player_service.py
 ├── conftest.py
 ├── pytest.ini
 ├── requirements.txt
-├── .env.example
+├── IT_LEARNING_REPORT_JA.md
 └── README.md
 ```
 
@@ -388,11 +392,13 @@ Pydanticを使用して、プレイヤー名の空白除去・文字数制限、
 
 また、すべての成功レスポンスにレスポンスモデルを設定し、FastAPIが返却データを検証するとともに、Swaggerに明確なAPI仕様を表示します。
 
-### ユーザー登録とパスワード保護
+### ユーザー認証とJWT
 
 `POST /auth/register`でログインユーザーを登録できます。パスワードはPydanticの`SecretStr`で通常表示から保護し、UserServiceでArgon2ハッシュへ変換してから`users`テーブルに保存します。平文パスワードとパスワードハッシュはAPIレスポンスに含めません。
 
 `POST /auth/token`はOAuth2のパスワードフォームでユーザー名とパスワードを受け取り、Argon2で保存済みパスワードハッシュを検証します。認証に成功した場合は、有効期限付きのJWTアクセストークンを発行します。JWTにはユーザー名を表す`sub`と有効期限`exp`を保存し、パスワードは含めません。
+
+プレイヤー作成時には、JWT認証から特定した現在のログインユーザーの`user_id`を、`players.owner_user_id`へ自動的に保存します。クライアントから`owner_user_id`を指定することはできません。外部キーにより実在するユーザーだけを所有者にでき、UNIQUE制約により1ユーザーが所有できるプレイヤーを1件に制限しています。既存データとの互換性のため、未紐付けのプレイヤーでは`owner_user_id`を`NULL`にできます。
 
 プレイヤーの作成・削除、スコア追加、スコア移動には、`Authorization: Bearer <token>`による認証が必要です。プレイヤー取得、ランキング取得、移動履歴取得などの読み取りAPIは公開しています。ログイン情報またはアクセストークンが無効な場合は、`WWW-Authenticate: Bearer`ヘッダー付きの`401`を返します。
 
@@ -426,13 +432,14 @@ Dockerイメージでは不要なファイルと`.env`を除外し、アプリ�
 
 ## 現在の制約
 
-* ユーザー登録、ログイン、JWTによる基本的な認証・認可は実装済みですが、管理者と一般ユーザーを区別するロールベースの権限制御は未実装です。
+* プレイヤー所有者の記録は実装済みですが、所有者本人だけに削除・スコア移動を許可する制御、およびスコア追加を管理者だけに許可するロールベースの権限制御は未実装です。
 * Docker Composeによる開発用実行環境は構築済みですが、本番環境へのデプロイは未実装です。
 * 本プロジェクトは開発中のポートフォリオであり、本番運用を目的とした完成済みシステムではありません。
 
 ## 今後の予定
 
-* ロールベースの権限制御の実装
+* プレイヤー所有者に基づく操作権限の実装
+* 管理者と一般ユーザーを区別するロールベースの権限制御
 * 本番環境へのデプロイ方法の整備
 
 
@@ -509,18 +516,18 @@ HTTP → FastAPI → PlayerService → PostgreSQL Repository → Psycopg → Pos
 
 玩家信息保存在 PostgreSQL 的 `players` 表中。FastAPI 启动时不会自动创建示例玩家。
 
-| 请求方法     | 接口                | 说明    |
-| -------- | ----------------- | ----- |
-| `GET`    | `/health`         | 健康检查  |
-| `GET`    | `/players/{name}` | 查询玩家  |
-| `GET`    | `/ranking`        | 获取排行榜 |
-| `POST`   | `/players`        | 创建玩家  |
-| `DELETE` | `/players/{name}` | 删除玩家  |
-| `PATCH`  | `/players/{name}/score` | 增加积分 |
-| `POST`   | `/transfers`             | 转移积分 |
-| `GET`    | `/transfers`             | 查询转移历史（支持分页） |
-| `POST` | `/auth/register` | 注册登录用户 |
-| `POST` | `/auth/token` | 登录并签发JWT访问令牌 |
+| Method   | Endpoint                  | 说明                     | 认证         |
+|----------|---------------------------|--------------------------|--------------|
+| `GET`    | `/health`                 | 健康检查                 | 无需         |
+| `GET`    | `/players/{name}`         | 查询玩家                 | 无需         |
+| `GET`    | `/ranking`                | 获取排行榜               | 无需         |
+| `POST`   | `/players`                | 创建玩家                 | Bearer Token |
+| `DELETE` | `/players/{name}`         | 删除玩家                 | Bearer Token |
+| `PATCH`  | `/players/{name}/score`   | 增加积分                 | Bearer Token |
+| `POST`   | `/transfers`              | 转移积分                 | Bearer Token |
+| `GET`    | `/transfers`              | 查询转移历史（支持分页） | 无需         |
+| `POST`   | `/auth/register`          | 注册登录用户             | 无需         |
+| `POST`   | `/auth/token`             | 登录并签发JWT访问令牌    | 无需         |
 
 创建玩家的请求示例：
 
@@ -625,7 +632,7 @@ python -m pytest -m "not integration" -q
 当前结果：
 
 ```text
-147 passed
+149 passed
 ```
 
 使用 PostgreSQL 与 Redis 的 Repository/API 集成测试：
@@ -637,7 +644,7 @@ python -m pytest -m integration -q
 当前结果：
 
 ```text
-68 passed
+73 passed
 ```
 
 执行全部测试：
@@ -649,15 +656,15 @@ python -m pytest -q
 当前结果：
 
 ```text
-215 passed
+222 passed
 ```
 
 ### GitHub Actions CI
 
 `.github/workflows/ci.yml` 会在每次 push 和 pull request 时自动执行：
 
-* `component-tests`：运行不需要 PostgreSQL 的147个测试
-* `integration-tests`：启动 PostgreSQL 17、执行 Alembic 迁移并运行68个集成测试
+* `component-tests`：运行不需要 PostgreSQL 的149个测试
+* `integration-tests`：启动 PostgreSQL 17、执行 Alembic 迁移并运行73个集成测试
 * `docker-build`：确认能够通过 Dockerfile 成功构建 API 镜像
 
 ### 事务设计
@@ -719,11 +726,13 @@ Redis 连接、读取、写入或删除失败，以及缓存中的 JSON 无效�
 
 所有成功响应都配置了响应模型，使 FastAPI 能在返回前检查数据结构，并在 Swagger 中生成明确的 API 说明。
 
-### 用户注册与密码保护
+### 用户认证与JWT
 
 可以通过`POST /auth/register`注册登录用户。密码首先由Pydantic的`SecretStr`避免在普通输出中暴露，再由UserService转换为Argon2哈希后保存到`users`表。API响应不会包含明文密码或密码哈希。
 
 `POST /auth/token`通过OAuth2密码表单接收用户名和密码，并使用Argon2验证数据库中保存的密码哈希。认证成功后，接口签发带有效期的JWT访问令牌。JWT只保存表示用户名的`sub`和过期时间`exp`，不会包含密码。
+
+创建玩家时，系统会将通过JWT认证得到的当前登录用户`user_id`自动写入`players.owner_user_id`，客户端不能自行指定`owner_user_id`。外键保证所有者必须是真实存在的用户，UNIQUE约束将每个用户可拥有的玩家限制为一个。为了兼容已有数据，尚未绑定用户的旧玩家可以将`owner_user_id`保留为`NULL`。
 
 创建或删除玩家、增加积分和转移积分时，必须通过`Authorization: Bearer <token>`完成身份认证。查询玩家、排行榜和转移历史等读取接口保持公开。登录信息或访问令牌无效时，API返回带有`WWW-Authenticate: Bearer`响应头的`401`。
 
@@ -772,11 +781,12 @@ Docker镜像会排除无关文件和`.env`，并使用非root用户`appuser`运�
 
 ### 当前限制
 
-* 已实现用户注册、登录和基于JWT的基础身份认证与访问控制，但尚未实现区分管理员与普通用户的角色权限控制
+* 已实现玩家所有者记录，但尚未限制只有所有者本人才能删除玩家或从该玩家转出积分，也尚未实现只有管理员才能增加积分的角色权限控制
 * 已完成Docker Compose开发环境，但尚未完成线上部署
 * 当前是持续开发中的作品集项目，不能视为已经完成的生产级系统
 
 ### 后续计划
 
-* 实现基于角色的权限控制
+* 实现基于玩家所有者的操作权限
+* 实现区分管理员与普通用户的角色权限控制
 * 完善线上部署方案

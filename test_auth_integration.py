@@ -190,3 +190,93 @@ def test_registered_user_can_login_and_create_player():
         "name": "Diana",
         "score": 0
     }
+
+    with get_connection() as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT
+                    players.owner_user_id,
+                    users.user_id
+                FROM players
+                JOIN users
+                  ON users.user_id =
+                     players.owner_user_id
+                WHERE players.name = %s
+                  AND users.username = %s
+                """,
+                (
+                    "Diana",
+                    "aooshiro"
+                )
+            )
+            row = cursor.fetchone()
+
+    assert row is not None
+
+    owner_user_id, user_id = row
+
+    assert owner_user_id == user_id
+
+
+def test_user_cannot_create_second_player():
+    register_response = client.post(
+        "/auth/register",
+        json={
+            "username": "aooshiro",
+            "password": "test-password-123!"
+        }
+    )
+
+    assert register_response.status_code == 201
+
+    login_response = client.post(
+        "/auth/token",
+        data={
+            "username": "aooshiro",
+            "password": "test-password-123!"
+        }
+    )
+
+    assert login_response.status_code == 200
+
+    headers = {
+        "Authorization": (
+            "Bearer "
+            + login_response.json()["access_token"]
+        )
+    }
+
+    first_response = client.post(
+        "/players",
+        headers=headers,
+        json={"name": "Diana"}
+    )
+    second_response = client.post(
+        "/players",
+        headers=headers,
+        json={"name": "Cindy"}
+    )
+
+    assert first_response.status_code == 201
+    assert second_response.status_code == 400
+    assert second_response.json() == {
+        "detail": "Invalid or duplicate player"
+    }
+
+    with get_connection() as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT COUNT(*)
+                FROM players
+                JOIN users
+                  ON users.user_id =
+                     players.owner_user_id
+                WHERE users.username = %s
+                """,
+                ("aooshiro",)
+            )
+            row = cursor.fetchone()
+
+    assert row[0] == 1
