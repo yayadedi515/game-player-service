@@ -2,7 +2,8 @@ import pytest
 
 from user_exceptions import (
     DuplicateUserError,
-    InvalidCredentialsError
+    InvalidCredentialsError,
+    UserNotFoundError
 )
 from user_service import UserService
 
@@ -16,6 +17,14 @@ class FakeUserRepository:
             "user_id": 1,
             "username": "aooshiro",
             "password_hash": "stored-password-hash",
+            "created_at": None
+        }
+        self.promoted_username = None
+        self.promote_result = {
+            "user_id": 1,
+            "username": "aooshiro",
+            "password_hash": "stored-password-hash",
+            "role": "admin",
             "created_at": None
         }
 
@@ -41,6 +50,10 @@ class FakeUserRepository:
     def find_user_by_username(self, username):
         self.requested_username = username
         return self.find_result
+
+    def promote_user_to_admin(self, username):
+        self.promoted_username = username
+        return self.promote_result
 
 
 class FakePasswordHasher:
@@ -165,3 +178,46 @@ def test_authenticate_wrong_password_raises_invalid_credentials():
             "aooshiro",
             "wrong-test-password"
         )
+
+
+def test_promote_user_to_admin_uses_repository():
+    repository = FakeUserRepository()
+    service = UserService(
+        repository,
+        FakePasswordHasher()
+    )
+
+    user = service.promote_user_to_admin(
+        "aooshiro"
+    )
+
+    assert (
+        repository.promoted_username
+        == "aooshiro"
+    )
+    assert user == {
+        "user_id": 1,
+        "username": "aooshiro",
+        "role": "admin",
+        "created_at": None
+    }
+    assert "password_hash" not in user
+
+
+def test_promote_missing_user_raises_user_not_found():
+    repository = FakeUserRepository()
+    repository.promote_result = None
+    service = UserService(
+        repository,
+        FakePasswordHasher()
+    )
+
+    with pytest.raises(UserNotFoundError):
+        service.promote_user_to_admin(
+            "missing-user"
+        )
+
+    assert (
+        repository.promoted_username
+        == "missing-user"
+    )

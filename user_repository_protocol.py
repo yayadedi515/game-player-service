@@ -15,3 +15,9 @@ class UserRepositoryProtocol(Protocol):
             username: str
     ) -> dict | None:
         ...
+
+    def promote_user_to_admin(
+            self,
+            username: str
+    ) -> dict | None:
+        ...

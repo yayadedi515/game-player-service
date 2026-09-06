@@ -1,6 +1,7 @@
 from user_exceptions import (
     DuplicateUserError,
-    InvalidCredentialsError
+    InvalidCredentialsError,
+    UserNotFoundError
 )
 from password_hasher_protocol import PasswordHasherProtocol
 from user_repository_protocol import UserRepositoryProtocol
@@ -65,5 +66,24 @@ class UserService:
         return {
             "user_id": user["user_id"],
             "username": user["username"],
+            "created_at": user["created_at"]
+        }
+
+    def promote_user_to_admin(
+            self,
+            username: str
+    ) -> dict:
+        user = (
+            self.repository
+            .promote_user_to_admin(username)
+        )
+
+        if user is None:
+            raise UserNotFoundError
+
+        return {
+            "user_id": user["user_id"],
+            "username": user["username"],
+            "role": user["role"],
             "created_at": user["created_at"]
         }

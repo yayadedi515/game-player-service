@@ -87,3 +87,43 @@ class UserRepository:
             "created_at": row[3],
             "role": row[4]
         }
+
+    def promote_user_to_admin(
+            self,
+            username: str
+    ) -> dict | None:
+        cleaned_username = username.strip()
+
+        if cleaned_username == "":
+            return None
+
+        query = """
+            UPDATE users
+            SET role = 'admin'
+            WHERE username = %s
+            RETURNING
+                user_id,
+                username,
+                password_hash,
+                role,
+                created_at
+        """
+
+        with get_connection() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    query,
+                    (cleaned_username,)
+                )
+                row = cursor.fetchone()
+
+        if row is None:
+            return None
+
+        return {
+            "user_id": row[0],
+            "username": row[1],
+            "password_hash": row[2],
+            "role": row[3],
+            "created_at": row[4]
+        }

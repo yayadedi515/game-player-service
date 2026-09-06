@@ -76,3 +76,38 @@ def test_user_repository_strips_username_whitespace():
 
     assert created_user["username"] == "aooshiro"
     assert found_user == created_user
+
+
+def test_promote_user_to_admin_updates_role():
+    repository = UserRepository()
+    repository.create_user(
+        "aooshiro",
+        "stored-password-hash"
+    )
+
+    promoted_user = (
+        repository.promote_user_to_admin(
+            "aooshiro"
+        )
+    )
+
+    assert promoted_user is not None
+    assert promoted_user["username"] == "aooshiro"
+    assert promoted_user["role"] == "admin"
+
+    found_user = repository.find_user_by_username(
+        "aooshiro"
+    )
+    assert found_user["role"] == "admin"
+
+
+def test_promote_missing_user_to_admin_returns_none():
+    repository = UserRepository()
+
+    promoted_user = (
+        repository.promote_user_to_admin(
+            "missing-user"
+        )
+    )
+
+    assert promoted_user is None

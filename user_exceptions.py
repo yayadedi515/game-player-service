@@ -11,3 +11,7 @@ class InvalidAccessTokenError(Exception):
 
 class PermissionDeniedError(Exception):
     pass
+
+
+class UserNotFoundError(Exception):
+    pass
