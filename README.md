@@ -4,28 +4,36 @@
 
 **日本語** | [简体中文](#中文说明)
 
-プレイヤー管理を題材に、FastAPI、PostgreSQL、トランザクション処理、pytestによる自動テストを実践したPythonバックエンドのポートフォリオです。
+プレイヤー管理を題材に、FastAPI、PostgreSQL、Redis、JWT認証、所有権・ロール認可、pytestによる自動テスト、Docker、Railwayへのデプロイを実践したPythonバックエンドのポートフォリオです。
 
-プレイヤーの作成・検索・削除、スコア管理、ランキング、プレイヤー間のスコア移動、移動履歴などを実装しています。
+ユーザー登録・ログイン、プレイヤー管理、管理者によるスコア追加、プレイヤー間のスコア移動、移動履歴、Redisランキングキャッシュなどを実装しています。
+
+## 公開デモ
+
+* API：https://game-player-service-production.up.railway.app/
+* Swagger UI：https://game-player-service-production.up.railway.app/docs
 
 > [!IMPORTANT]
-> 現在、FastAPI、PlayerService、PostgreSQL Repositoryが接続されており、プレイヤーの作成・検索・削除・スコア追加・スコア移動・移動履歴取得・ランキング取得をPostgreSQL上で実行できます。
+> 現在、FastAPI、Service層、PostgreSQL Repository、Redisキャッシュを接続し、JWT認証と所有権・ロール認可を含むAPIをRailway上で公開しています。
 > 旧インメモリ版のServiceは、基礎的な業務ロジックとJSON保存を確認する`legacy_player_service.py`として残しています。
+
 
 ## 現在の構成
 
-| レイヤー                  | 主な機能                                      | データ保存先       |
-|------------------------|-------------------------------------------|--------------|
-| FastAPI API / Router   | HTTPリクエスト・レスポンス、入力検証、グローバル例外変換 | PlayerService経由 |
-| PlayerService          | APIユースケースの調整、Repository契約に基づく業務結果・業務例外への変換 | PlayerRepositoryProtocol経由 |
-| PostgreSQL Repository  | PlayerRepositoryクラス、SQL、トランザクション、PostgreSQLデータアクセス | PostgreSQL |
-| Legacy PlayerService   | 基礎的な業務ロジック、JSON保存・読込                     | メモリ／JSON       |
+| レイヤー                  | 主な機能                                   | 主な接続先                       |
+| --------------------- | -------------------------------------- | --------------------------- |
+| FastAPI API / Router  | HTTPリクエスト・レスポンス、Pydantic入力検証、依存関係の取得   | PlayerService / UserService |
+| Service               | プレイヤー・認証ユースケース、業務結果・業務例外、所有権・ロール認可     | Repository Protocol         |
+| PostgreSQL Repository | プレイヤー、ユーザー、スコア移動履歴のSQLとトランザクション        | PostgreSQL                  |
+| Redis Ranking Cache   | ランキングの読み取りキャッシュ、TTL、更新時の無効化、障害時フォールバック | Redis                       |
+| 管理CLI                 | 既存ユーザーの管理者ロールへの昇格                      | UserService                 |
+| Legacy PlayerService  | 基礎的な業務ロジック、JSON保存・読込                   | メモリ／JSON                    |
 
 現在の正式なAPI経路は次のとおりです。
 
-```text
-HTTP → FastAPI → PlayerService → PostgreSQL Repository → Psycopg → PostgreSQL
-```
+* 通常処理：HTTP → FastAPI Router → Service → Repository → Psycopg → PostgreSQL
+* ランキング取得：PlayerService → RedisRankingCache。キャッシュミス時だけPlayerRepositoryからPostgreSQLを参照
+* 認証処理：Bearer Token → `get_current_user` → JWT検証 → UserRepositoryから最新のユーザーとロールを取得
 
 ## 主な実装内容
 
@@ -65,6 +73,7 @@ HTTP → FastAPI → PlayerService → PostgreSQL Repository → Psycopg → Pos
 * Argon2
 * PyJWT
 * pwdlib / Argon2
+* Railway
 
 ## API
 
@@ -210,7 +219,7 @@ python -m pytest -m "not integration" -q
 実行結果：
 
 ```text
-163 passed
+169 passed
 ```
 
 PostgreSQL・Redisを使用するRepository・API統合テスト：
@@ -222,7 +231,7 @@ python -m pytest -m integration -q
 実行結果：
 
 ```text
-78 passed
+81 passed
 ```
 
 全テスト：
@@ -234,7 +243,7 @@ python -m pytest -q
 現在の実行結果：
 
 ```text
-241 passed
+250 passed
 ```
 
 統合テストには、意図的にPostgreSQLの整数上限超過を発生させるテストが含まれています。スコアの加算処理が途中で失敗した場合でも、送信者の減算、受信者の加算、移動履歴の追加がすべてロールバックされることを確認しています。
@@ -243,8 +252,8 @@ python -m pytest -q
 
 `.github/workflows/ci.yml`により、pushおよびpull requestのたびに次の処理を自動実行します。
 
-* `component-tests`：PostgreSQLを使用しない163件のテスト
-* `integration-tests`：PostgreSQL 17の起動、Alembicマイグレーション、78件の統合テスト
+* `component-tests`：PostgreSQLを使用しない169件のテスト
+* `integration-tests`：PostgreSQL 17の起動、Alembicマイグレーション、81件の統合テスト
 * `docker-build`：DockerfileからAPIイメージを構築できることの確認
 
 ## プロジェクト構成
@@ -283,6 +292,7 @@ python -m pytest -q
 ├── user_repository.py
 ├── user_repository_protocol.py
 ├── user_exceptions.py
+├── manage_users.py
 ├── password_hasher.py
 ├── password_hasher_protocol.py
 ├── token_service.py
@@ -306,6 +316,8 @@ python -m pytest -q
 ├── test_user_service.py
 ├── test_user_repository.py
 ├── test_user_schemas.py
+├── test_manage_users.py
+├── test_manage_users_integration.py
 ├── test_password_hasher.py
 ├── test_token_service.py
 ├── test_ranking_cache.py
@@ -406,6 +418,17 @@ Pydanticを使用して、プレイヤー名の空白除去・文字数制限、
 
 プレイヤー作成は認証済みユーザーに許可し、スコア追加は管理者だけに許可します。プレイヤー削除は所有者本人または管理者が実行でき、スコア移動は送信元プレイヤーの所有者本人だけが実行できます。管理者であっても、所有していないプレイヤーになりすましてスコアを移動することはできません。読み取りAPIは公開しています。認証情報が無効な場合は`401`、認証済みでも権限が不足する場合は`403`を返します。
 
+### 管理者ロールの運用
+
+公開登録では一般ユーザーだけを作成します。既存ユーザーを管理者へ昇格する場合は、公開APIではなく、信頼された運用者だけが実行できる`manage_users.py`を使用します。
+
+```powershell
+python manage_users.py promote-admin <username>
+```
+
+このCLIはUserServiceとUserRepositoryを通して対象ユーザーのロールを`admin`へ更新します。存在しないユーザーを指定した場合はエラーとして終了します。Railway環境ではAPIサービスのConsoleから実行できるため、データベースを直接編集する必要はありません。
+
+
 ## Docker Composeによる実行
 
 `compose.yaml`を使用して、FastAPI、PostgreSQL、Redis、Alembicマイグレーションをまとめて起動できます。
@@ -434,16 +457,35 @@ docker compose down
 
 Dockerイメージでは不要なファイルと`.env`を除外し、アプリケーションを非rootユーザーの`appuser`で実行します。また、Dockerの`HEALTHCHECK`で`/health`を定期的に確認します。
 
+## Railwayによる公開デプロイ
+
+本プロジェクトはRailwayへデプロイし、ポートフォリオ用の公開デモとして動作しています。
+
+* API：https://game-player-service-production.up.railway.app/
+* Swagger UI：https://game-player-service-production.up.railway.app/docs
+
+Railway上では、FastAPI、PostgreSQL、Redisをそれぞれ独立したサービスとして構成しています。外部公開するのはFastAPIサービスだけで、PostgreSQLとRedisはRailwayのプライベートネットワーク内からのみ接続します。
+
+PostgreSQLの接続情報はRailwayの参照変数から受け取り、Redisは`REDIS_URL`が設定されている場合にURL接続を使用します。ローカル環境では従来どおり`REDIS_HOST`と`REDIS_PORT`へフォールバックできます。データベースパスワードとJWT秘密鍵は環境変数として管理し、Gitリポジトリには保存しません。
+
+DockerコンテナはRailwayから渡される`PORT`を使用してUvicornを起動し、ローカル実行時にはポート8000を使用します。デプロイ前には`python -m alembic upgrade head`を実行して最新のマイグレーションを適用し、`/health`によるヘルスチェックが成功した後にデプロイを完了します。また、GitHub ActionsのCIが成功した場合だけ`main`ブランチを自動デプロイするように設定しています。
+
+公開環境では、ユーザー登録、JWTログイン、プレイヤー作成、管理者CLI、ロール・所有権認可、PostgreSQLへの保存、Redisランキングキャッシュと更新時のキャッシュ削除まで確認しています。デモ環境のデータは予告なく変更または削除する場合があります。
+
+
 ## 現在の制約
 
-* 初期管理者の作成やユーザーロールを変更する管理APIは未実装であり、現在は信頼されたデータベース管理操作によって管理者へ昇格させます。
-* Docker Composeによる開発用実行環境は構築済みですが、本番環境へのデプロイは未実装です。
-* 本プロジェクトは開発中のポートフォリオであり、本番運用を目的とした完成済みシステムではありません。
+* 管理者への昇格は信頼された運用者がCLIから実行します。管理画面、管理者ロールの解除、ロール変更の監査ログは未実装です。
+* 公開登録にはメールアドレス確認、パスワード再設定、レート制限が未実装です。
+* Railwayへの公開デプロイは完了していますが、本番運用を想定した監視・通知、バックアップ復旧手順、高可用性構成は未整備です。
+* 本プロジェクトは開発中のポートフォリオであり、完成済みの商用ゲームサーバーを目的としたものではありません。
 
 ## 今後の予定
 
-* 管理者アカウントとユーザーロールの運用方法の整備
-* 本番環境へのデプロイ方法の整備
+* 公開APIのレート制限とアカウント運用機能の追加
+* 管理者操作の監査ログと運用手順の整備
+* 監視・通知およびバックアップ復旧手順の整備
+
 
 
 ---
@@ -452,26 +494,37 @@ Dockerイメージでは不要なファイルと`.env`を除外し、アプリ�
 [日本語](#game-player-service) | **简体中文**
 ### 项目简介
 
-Game Player Service 是一个以游戏玩家管理为场景的 Python 后端作品集项目，用于实践 FastAPI、PostgreSQL、数据库事务、自动化测试和 Git 开发流程。
+Game Player Service 是一个以游戏玩家管理为场景的 Python 后端作品集项目，用于实践 FastAPI、PostgreSQL、Redis、JWT身份认证、所有权与角色授权、pytest自动化测试、Docker和Railway部署。
 
-项目已实现玩家创建、查询、删除、积分增加、排行榜、玩家间积分转移、转移历史及 JSON 持久化等功能。
+项目已经实现用户注册与登录、玩家管理、管理员积分发放、玩家间积分转移、转移历史和Redis排行榜缓存等功能。
+
+### 在线演示
+
+* API：https://game-player-service-production.up.railway.app/
+* Swagger UI：https://game-player-service-production.up.railway.app/docs
 
 > [!IMPORTANT]
-> 当前 FastAPI、PlayerService 和 PostgreSQL Repository 已正式连接，可以使用 PostgreSQL 完成玩家创建、查询、删除、积分增加、积分转移、转移历史查询和排行榜获取。
-> 原内存版 Service 作为 `legacy_player_service.py` 保留，用于展示基础业务逻辑和 JSON 保存功能。
+> 当前FastAPI、Service层、PostgreSQL Repository和Redis缓存已经连接，并在Railway上公开运行包含JWT认证、所有权和角色授权的完整API。
+> 原内存版Service作为`legacy_player_service.py`保留，用于展示基础业务逻辑和JSON保存功能。
+
 
 ### 当前架构
 
-| 层级                    | 主要职责                         | 数据存储       |
-|-----------------------|------------------------------|------------|
-| FastAPI API / Router  | HTTP 请求与响应、输入验证、全局异常转换 | 通过 PlayerService |
-| PlayerService         | 组织 API 用例、基于 Repository 契约转换业务结果与业务异常 | 通过 PlayerRepositoryProtocol |
-| PostgreSQL Repository | PlayerRepository 类、SQL、事务及 PostgreSQL 数据访问 | PostgreSQL |
-| Legacy PlayerService  | 基础业务逻辑、JSON 保存与读取            | 内存／JSON    |
+| 层级                    | 主要职责                          | 主要连接目标                      |
+| --------------------- | ----------------------------- | --------------------------- |
+| FastAPI API / Router  | HTTP请求与响应、Pydantic输入验证、获取依赖对象 | PlayerService / UserService |
+| Service               | 玩家与认证用例、业务结果与业务异常、所有权和角色授权    | Repository Protocol         |
+| PostgreSQL Repository | 玩家、用户和积分转移历史的SQL与事务处理         | PostgreSQL                  |
+| Redis Ranking Cache   | 排行榜读取缓存、TTL、数据更新时失效、故障时降级     | Redis                       |
+| 管理CLI                 | 将现有用户提升为管理员角色                 | UserService                 |
+| Legacy PlayerService  | 基础业务逻辑、JSON保存与读取              | 内存／JSON                     |
 
-当前正式 API 的调用路径为：
+当前正式API的主要调用路径如下：
 
-HTTP → FastAPI → PlayerService → PostgreSQL Repository → Psycopg → PostgreSQL
+* 普通处理：HTTP → FastAPI Router → Service → Repository → Psycopg → PostgreSQL
+* 排行榜查询：PlayerService → RedisRankingCache；只有缓存未命中时才通过PlayerRepository访问PostgreSQL
+* 身份认证：Bearer Token → `get_current_user` → JWT验证 → UserRepository读取最新用户信息和角色
+
 
 ### 核心功能
 
@@ -514,6 +567,7 @@ HTTP → FastAPI → PlayerService → PostgreSQL Repository → Psycopg → Pos
 * Argon2
 * PyJWT
 * pwdlib / Argon2
+* Railway
 
 ### 当前 API
 
@@ -637,7 +691,7 @@ python -m pytest -m "not integration" -q
 当前结果：
 
 ```text
-163 passed
+169 passed
 ```
 
 使用 PostgreSQL 与 Redis 的 Repository/API 集成测试：
@@ -649,7 +703,7 @@ python -m pytest -m integration -q
 当前结果：
 
 ```text
-78 passed
+81 passed
 ```
 
 执行全部测试：
@@ -661,15 +715,15 @@ python -m pytest -q
 当前结果：
 
 ```text
-241 passed
+250 passed
 ```
 
 ### GitHub Actions CI
 
 `.github/workflows/ci.yml` 会在每次 push 和 pull request 时自动执行：
 
-* `component-tests`：运行不需要 PostgreSQL 的163个测试
-* `integration-tests`：启动 PostgreSQL 17、执行 Alembic 迁移并运行78个集成测试
+* `component-tests`：运行不需要 PostgreSQL 的169个测试
+* `integration-tests`：启动 PostgreSQL 17、执行 Alembic 迁移并运行81个集成测试
 * `docker-build`：确认能够通过 Dockerfile 成功构建 API 镜像
 
 ### 事务设计
@@ -743,6 +797,17 @@ Redis 连接、读取、写入或删除失败，以及缓存中的 JSON 无效�
 
 创建玩家允许所有已认证用户执行，增加积分仅允许管理员执行。删除玩家只允许玩家所有者本人或管理员执行，转移积分只允许发送方玩家的所有者本人执行。即使是管理员，也不能冒充自己不拥有的玩家转移积分。读取API保持公开。身份认证失败时返回`401`，身份有效但权限不足时返回`403`。
 
+### 管理员角色运维
+
+公开注册接口只会创建普通用户。需要将现有用户提升为管理员时，不使用公开API，而是由可信的服务器运维人员执行`manage_users.py`。
+
+```powershell
+python manage_users.py promote-admin <username>
+```
+
+该CLI通过UserService和UserRepository将目标用户的角色更新为`admin`。如果指定的用户不存在，命令会以错误结束。在Railway环境中可以从API服务的Console执行，因此不需要直接编辑数据库。
+
+
 ### 测试覆盖的代表场景
 
 * 玩家名为空或仅包含空格
@@ -786,13 +851,31 @@ docker compose down
 
 Docker镜像会排除无关文件和`.env`，并使用非root用户`appuser`运行应用。Docker的`HEALTHCHECK`会定期访问`/health`检查API状态。
 
+### Railway公开部署
+
+本项目已经部署到Railway，并作为作品集公开演示环境运行。
+
+* API：https://game-player-service-production.up.railway.app/
+* Swagger UI：https://game-player-service-production.up.railway.app/docs
+
+Railway中分别运行FastAPI、PostgreSQL和Redis三个独立服务。只有FastAPI服务对外公开，PostgreSQL与Redis只能通过Railway内部私有网络访问。
+
+PostgreSQL连接信息通过Railway服务引用变量传入。设置`REDIS_URL`时，应用使用URL连接Redis；在本地环境中则可以继续使用`REDIS_HOST`和`REDIS_PORT`作为后备配置。数据库密码与JWT密钥均通过环境变量管理，不会保存到Git仓库。
+
+Docker容器使用Railway提供的`PORT`启动Uvicorn，本地运行时则默认使用8000端口。部署前会执行`python -m alembic upgrade head`应用最新数据库迁移，并通过`/health`健康检查确认API已经正常启动。项目还配置为只有GitHub Actions CI成功后，才自动部署`main`分支。
+
+已经在公开环境中验证了用户注册、JWT登录、玩家创建、管理员CLI、角色与所有权授权、PostgreSQL持久化、Redis排行榜缓存，以及数据更新后的缓存失效。演示环境中的数据可能在不提前通知的情况下被修改或清理。
+
+
 ### 当前限制
 
-* 尚未实现创建初始管理员或修改用户角色的管理API，目前需要通过可信的数据库管理操作将用户提升为管理员
-* 已完成Docker Compose开发环境，但尚未完成线上部署
-* 当前是持续开发中的作品集项目，不能视为已经完成的生产级系统
+* 管理员提升由可信的运维人员通过CLI执行，尚未实现管理页面、取消管理员角色和角色变更审计日志
+* 公开注册尚未实现邮箱验证、密码重置和请求速率限制
+* 已完成Railway公开部署，但尚未建立面向正式生产环境的监控告警、备份恢复流程和高可用架构
+* 当前项目是持续开发中的作品集，不以成为完整的商业游戏服务器为目标
 
 ### 后续计划
 
-* 完善管理员账户与用户角色的运用方式
-* 完善线上部署方案
+* 为公开API增加速率限制与账户运维功能
+* 增加管理员操作审计日志并完善运维流程
+* 完善监控告警与备份恢复流程
